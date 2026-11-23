@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -12,7 +12,7 @@ class SecurityTest extends TestCase
 {
     public function test_requires_api_key_headers(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/multifile')->basePath('xapi');
+        $api = OpenApi::from(__DIR__.'/fixtures/multifile')->basePath('xapi');
 
         // multifile fixtures have no root security — add via parse
         $api = OpenApi::parse(<<<'YAML'

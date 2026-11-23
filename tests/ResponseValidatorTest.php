@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,7 +15,7 @@ class ResponseValidatorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->api = OpenApi::from(__DIR__ . '/fixtures/petstore.yaml');
+        $this->api = OpenApi::from(__DIR__.'/fixtures/petstore.yaml');
     }
 
     public function test_valid_and_invalid_responses(): void

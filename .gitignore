@@ -2,9 +2,13 @@
 /composer.lock
 /.phpunit.cache/
 /coverage/
+/build/
 /infection.log
 /infection.html
 /infection.json
 /infection-summary.log
 /infection-stryker.json
 /.phpunit.result.cache
+/tests/laravel/build/
+/tests/laravel/composer.lock
+/tests/laravel/vendor/

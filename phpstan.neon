@@ -1,0 +1,11 @@
+parameters:
+    level: 0
+    paths:
+        - src/Document
+        - src/Reader
+        - src/Validation
+        - src/OpenApi.php
+        - tests
+    excludePaths:
+        analyse:
+            - tests/laravel

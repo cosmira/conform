@@ -5,8 +5,9 @@
          colors="true"
          cacheDirectory=".phpunit.cache">
     <testsuites>
-        <testsuite name="Cosmira OpenAPI">
+        <testsuite name="Conform">
             <directory>tests</directory>
+            <exclude>tests/laravel</exclude>
         </testsuite>
     </testsuites>
     <source>
@@ -17,9 +18,4 @@
             <directory>src/Laravel</directory>
         </exclude>
     </source>
-    <coverage>
-        <report>
-            <text outputFile="php://stdout" showOnlySummary="true"/>
-        </report>
-    </coverage>
 </phpunit>

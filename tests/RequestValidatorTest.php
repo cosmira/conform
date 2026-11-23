@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -14,7 +14,7 @@ class RequestValidatorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->api = OpenApi::from(__DIR__ . '/fixtures/petstore.yaml');
+        $this->api = OpenApi::from(__DIR__.'/fixtures/petstore.yaml');
     }
 
     public function test_valid_create_pet(): void
@@ -52,7 +52,7 @@ class RequestValidatorTest extends TestCase
 
     public function test_base_path(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/petstore.yaml')->basePath('api');
+        $api = OpenApi::from(__DIR__.'/fixtures/petstore.yaml')->basePath('api');
 
         $this->assertSame([], $api->request($this->json('POST', '/api/pets', [
             'name' => 'Rex',

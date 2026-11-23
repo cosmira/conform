@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,7 +17,7 @@ class FixtureIntegrationTest extends TestCase
 {
     public function test_oai_petstore_list_and_create(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/github/oai-petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/github/oai-petstore.yaml');
 
         $this->assertSame('listPets', $api->match('GET', '/pets')['operation']['operationId']);
         $this->assertSame(['petId' => '42'], $api->match('GET', '/pets/42')['parameters']);
@@ -52,7 +52,7 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_oai_petstore_show_by_id(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/github/oai-petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/github/oai-petstore.yaml');
 
         $request = Request::create('/pets/abc', 'GET');
         $this->assertSame([], $api->request($request));
@@ -67,7 +67,7 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_openapi_generator_petstore_loads_and_matches(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/github/openapi-generator-petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/github/openapi-generator-petstore.yaml');
 
         $this->assertNotEmpty($api->document()->paths());
         $this->assertNotNull($api->document()->get('components.schemas.Pet'));
@@ -92,7 +92,7 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_openapi_generator_pet_body_schema(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/github/openapi-generator-petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/github/openapi-generator-petstore.yaml');
 
         // Try POST /pet with valid minimal Pet if operation exists
         if (! $api->match('POST', '/pet')) {
@@ -117,7 +117,7 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_publicapi_style_security_params_body_response(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/github/publicapi-style.yaml')->basePath('xapi');
+        $api = OpenApi::from(__DIR__.'/fixtures/github/publicapi-style.yaml')->basePath('xapi');
 
         $headers = [
             'HTTP_X_API_AUTH_TOKEN' => 't',
@@ -183,7 +183,7 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_multifile_fixture_directory(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/multifile')->basePath('xapi');
+        $api = OpenApi::from(__DIR__.'/fixtures/multifile')->basePath('xapi');
 
         $this->assertArrayHasKey('common.yaml', $api->document()->files());
         $this->assertNotNull($api->document()->resolve('common.yaml#/components/parameters/limit'));
@@ -198,7 +198,7 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_local_petstore_fixture(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/petstore.yaml');
         $this->assertNotNull($api->match('GET', '/pets'));
         $this->assertNotNull($api->match('POST', '/pets'));
 
@@ -210,10 +210,10 @@ class FixtureIntegrationTest extends TestCase
 
     public function test_users_yaml_and_json(): void
     {
-        $yaml = OpenApi::from(__DIR__ . '/fixtures/users.yaml');
-        $json = OpenApi::from(__DIR__ . '/fixtures/users.json');
+        $yaml = OpenApi::from(__DIR__.'/fixtures/users.yaml');
+        $json = OpenApi::from(__DIR__.'/fixtures/users.json');
 
-        $this->assertNotNull($yaml->match('GET', '/users'));
-        $this->assertNotNull($json->match('GET', '/users'));
+        $this->assertSame('getUser', $yaml->match('GET', '/users/1')['operation']['operationId'] ?? null);
+        $this->assertSame('listUsers', $json->match('GET', '/users')['operation']['operationId'] ?? null);
     }
 }

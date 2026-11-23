@@ -150,7 +150,6 @@ components:
           type: object
           additionalProperties:
             type: string
-      additionalProperties: false
 
     Error:
       type: object

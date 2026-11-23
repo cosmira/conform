@@ -2,18 +2,39 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Validation;
+namespace Cosmira\Conform\Validation;
 
-use Cosmira\OpenApi\Document\Document;
+use Cosmira\Conform\Document\Document;
+use Illuminate\Support\Arr;
+use Symfony\Component\HttpFoundation\HeaderBag;
+use Symfony\Component\HttpFoundation\ParameterBag;
 use Symfony\Component\HttpFoundation\Request;
 
 class RequestValidator
 {
+    /**
+     * OpenAPI location for HTTP header parameters.
+     */
+    private const HEADER = 'header';
+
+    /**
+     * Default media type for request bodies.
+     */
+    private const JSON = 'application/json';
+
+    /**
+     * Use the supplied schema validator to check request values.
+     */
     public function __construct(
+        /**
+         * Shared checker for parameter and body schemas.
+         */
         protected SchemaValidator $schemas = new SchemaValidator,
     ) {}
 
     /**
+     * Collect security, parameter, and body errors for the matched operation.
+     *
      * @param  array<string, string>  $pathParameters
      * @return list<string>
      */
@@ -27,138 +48,148 @@ class RequestValidator
         $errors = $this->security($request, $operation, $pathItem, $document);
 
         foreach ($this->parameters($operation, $pathItem, $document) as $parameter) {
-            $name = $parameter['name'] ?? null;
-            $in = $parameter['in'] ?? null;
+            $message = $this->parameterError(
+                $request,
+                $parameter,
+                $pathParameters,
+                $document,
+            );
 
-            if (! is_string($name) || ! is_string($in)) {
-                continue;
-            }
-
-            $value = $this->value($request, $in, $name, $pathParameters);
-            $required = ($parameter['required'] ?? false) || $in === 'path';
-
-            if ($value === null || $value === '') {
-                if ($required) {
-                    $errors[] = "Missing required {$in} parameter [{$name}].";
-                }
-
-                continue;
-            }
-
-            $schema = $parameter['schema'] ?? null;
-
-            if (! is_array($schema)) {
-                continue;
-            }
-
-            $schema = $this->expand($schema, $document);
-            $value = $this->cast($value, $schema);
-
-            if ($message = $this->schemas->validate($value, $schema, $document)) {
-                $errors[] = "{$in}.{$name}: {$message}";
+            if ($message !== null) {
+                $errors[] = $message;
             }
         }
 
         if (isset($operation['requestBody'])) {
-            $errors = array_merge($errors, $this->body($request, $operation['requestBody'], $document));
+            $bodyErrors = $this->body($request, $operation['requestBody'], $document);
+
+            return array_merge($errors, $bodyErrors);
         }
 
         return $errors;
     }
 
-    /** @return list<string> */
-    protected function security(Request $request, array $operation, array $pathItem, Document $document): array
+    /**
+     * Check one declared parameter and prefix any error with its location.
+     */
+    private function parameterError(
+        Request $request,
+        array $parameter,
+        array $pathParameters,
+        Document $document,
+    ): ?string {
+        $name = $parameter['name'] ?? null;
+        $location = $parameter['in'] ?? null;
+
+        if (! is_string($name) || ! is_string($location)) {
+            return null;
+        }
+
+        $value = $this->value($request, $location, $name, $pathParameters);
+
+        if ($value === null || $value === '') {
+            return $this->missingParameter($parameter, $location, $name);
+        }
+
+        $schema = $parameter['schema'] ?? null;
+
+        if (! is_array($schema)) {
+            return null;
+        }
+
+        $schema = $this->expand($schema, $document);
+        $message = $this->schemas->validate($this->cast($value, $schema), $schema, $document);
+
+        return $message ? "{$location}.{$name}: {$message}" : null;
+    }
+
+    /**
+     * Report an absent parameter when the operation requires it.
+     */
+    private function missingParameter(array $parameter, string $location, string $name): ?string
     {
+        return ($parameter['required'] ?? false) || $location === 'path'
+            ? "Missing required {$location} parameter [{$name}]."
+            : null;
+    }
+
+    /**
+     * Accept any complete security group or report the first group's errors.
+     *
+     * @return list<string>
+     */
+    protected function security(
+        Request $request,
+        array $operation,
+        array $pathItem,
+        Document $document,
+    ): array {
         $requirements = $operation['security']
             ?? $pathItem['security']
-            ?? $document->get('security')
-            ?? null;
+            ?? $document->get('security');
 
-        // Explicit empty security: optional auth
-        if ($requirements === []) {
+        if (! is_array($requirements)) {
             return [];
         }
 
-        if (! is_array($requirements) || $requirements === null) {
-            return [];
-        }
+        $first = null;
 
-        // OpenAPI: OR between requirement objects; AND within each object
+        // An operation accepts any complete group of security schemes.
         foreach ($requirements as $requirement) {
             if (! is_array($requirement)) {
                 continue;
             }
 
-            $missing = [];
+            $errors = $this->missingSchemes($request, $requirement, $document);
 
-            foreach ($requirement as $schemeName => $scopes) {
-                if (! is_string($schemeName)) {
-                    continue;
-                }
-
-                $scheme = $this->scheme($schemeName, $document);
-
-                if ($scheme === null) {
-                    continue;
-                }
-
-                if ($this->schemeValue($request, $scheme) === null) {
-                    $label = $scheme['name'] ?? $schemeName;
-                    $in = $scheme['in'] ?? 'header';
-                    $missing[] = "{$in} [{$label}]";
-                }
-            }
-
-            if ($missing === []) {
+            if ($errors === []) {
                 return [];
             }
+
+            $first ??= $errors;
         }
 
-        // None of the OR groups satisfied — report first group's gaps
-        $first = null;
+        return $first ?? [];
+    }
 
-        foreach ($requirements as $requirement) {
-            if (is_array($requirement)) {
-                $first = $requirement;
-                break;
-            }
-        }
-
-        if ($first === null) {
-            return [];
-        }
-
+    /**
+     * Collect credentials missing from one security requirement group.
+     */
+    private function missingSchemes(Request $request, array $requirement, Document $document): array
+    {
         $errors = [];
 
-        foreach ($first as $schemeName => $scopes) {
+        foreach (array_keys($requirement) as $schemeName) {
             if (! is_string($schemeName)) {
                 continue;
             }
 
             $scheme = $this->scheme($schemeName, $document);
 
-            if ($scheme === null) {
+            if ($scheme === null || $this->schemeValue($request, $scheme) !== null) {
                 continue;
             }
 
-            if ($this->schemeValue($request, $scheme) === null) {
-                $name = $scheme['name'] ?? $schemeName;
-                $in = $scheme['in'] ?? 'header';
-                $errors[] = "Missing required security {$in} [{$name}].";
-            }
+            $name = $scheme['name'] ?? $schemeName;
+            $location = $scheme['in'] ?? self::HEADER;
+            $errors[] = "Missing required security {$location} [{$name}].";
         }
 
         return $errors;
     }
 
+    /**
+     * Find a named security scheme and resolve its reference when present.
+     */
     protected function scheme(string $name, Document $document): ?array
     {
         $scheme = $document->get("components.securitySchemes.{$name}");
 
         if (! is_array($scheme)) {
             // Try resolve from any file (multi-file may leave only $ref in merged map)
-            foreach ($document->files() as $file => $data) {
-                $candidate = $data['components']['securitySchemes'][$name] ?? null;
+            foreach ($document->files() as $data) {
+                $schemes = Arr::get($data, 'components.securitySchemes', []);
+                $candidate = $schemes[$name] ?? null;
 
                 if (! is_array($candidate)) {
                     continue;
@@ -180,62 +211,70 @@ class RequestValidator
         return is_array($scheme) ? $scheme : null;
     }
 
+    /**
+     * Read the credential required by the declared security scheme.
+     */
     protected function schemeValue(Request $request, array $scheme): mixed
     {
         $type = $scheme['type'] ?? null;
 
         if ($type === 'apiKey') {
-            $name = $scheme['name'] ?? null;
-            $in = $scheme['in'] ?? 'header';
-
-            if (! is_string($name)) {
-                return null;
-            }
-
-            return match ($in) {
-                'header' => $request->headers->get($name),
-                'query' => $request->query->get($name),
-                'cookie' => $request->cookies->get($name),
-                default => null,
-            };
+            return $this->apiKey($request, $scheme);
         }
 
-        if ($type === 'http') {
-            $auth = $request->headers->get('Authorization');
+        $credentials = $request->headers->get('Authorization');
 
-            if ($auth === null || $auth === '') {
-                return null;
-            }
-
-            $httpScheme = strtolower((string) ($scheme['scheme'] ?? 'bearer'));
-
-            if ($httpScheme === 'bearer') {
-                return str_starts_with(strtolower($auth), 'bearer ') ? $auth : null;
-            }
-
-            if ($httpScheme === 'basic') {
-                return str_starts_with(strtolower($auth), 'basic ') ? $auth : null;
-            }
-
-            return $auth;
+        if ($credentials === null || $credentials === '') {
+            return null;
         }
 
-        // oauth2 / openIdConnect — presence of Authorization only
-        if (in_array($type, ['oauth2', 'openIdConnect'], true)) {
-            $auth = $request->headers->get('Authorization');
-
-            return ($auth !== null && $auth !== '') ? $auth : null;
-        }
-
-        return null;
+        return match ($type) {
+            'http' => $this->httpCredentials($credentials, $scheme),
+            'oauth2', 'openIdConnect' => $credentials,
+            default => null,
+        };
     }
 
-    /** @return list<array> */
+    /**
+     * Read an API key from its configured header, query, or cookie location.
+     */
+    private function apiKey(Request $request, array $scheme): mixed
+    {
+        $name = $scheme['name'] ?? null;
+
+        if (! is_string($name)) {
+            return null;
+        }
+
+        return $this->parameterBag($request, $scheme['in'] ?? self::HEADER)?->get($name);
+    }
+
+    /**
+     * Require a matching prefix for Basic or Bearer credentials.
+     */
+    private function httpCredentials(string $credentials, array $scheme): ?string
+    {
+        $prefix = strtolower((string) ($scheme['scheme'] ?? 'bearer'));
+
+        if (in_array($prefix, ['bearer', 'basic'], true)) {
+            return str_starts_with(strtolower($credentials), $prefix.' ') ? $credentials : null;
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * Combine inherited and operation parameters, preferring operation definitions.
+     *
+     * @return list<array>
+     */
     protected function parameters(array $operation, array $pathItem, Document $document): array
     {
         $resolved = [];
 
-        foreach (array_merge($pathItem['parameters'] ?? [], $operation['parameters'] ?? []) as $parameter) {
+        $parameters = array_merge($pathItem['parameters'] ?? [], $operation['parameters'] ?? []);
+
+        foreach ($parameters as $parameter) {
             if (! is_array($parameter)) {
                 continue;
             }
@@ -248,42 +287,78 @@ class RequestValidator
                 continue;
             }
 
-            $resolved[$parameter['in'] . ':' . $parameter['name']] = $parameter;
+            $resolved[$parameter['in'].':'.$parameter['name']] = $parameter;
         }
 
         return array_values($resolved);
     }
 
-    /** @param  array<string, string>  $pathParameters */
-    protected function value(Request $request, string $in, string $name, array $pathParameters): mixed
-    {
-        return match ($in) {
-            'path' => $pathParameters[$name]
-                ?? $request->attributes->get('_route_params')[$name] ?? null
-                ?? $request->attributes->get($name),
-            'query' => $request->query->get($name),
-            'header' => $request->headers->get($name),
-            'cookie' => $request->cookies->get($name),
-            default => null,
-        };
+    /**
+     * Read a request parameter, preferring matched template values for paths.
+     *
+     * @param  array<string, string>  $pathParameters
+     */
+    protected function value(
+        Request $request,
+        string $in,
+        string $name,
+        array $pathParameters,
+    ): mixed {
+        if ($in === 'path') {
+            $routeParameters = $request->attributes->get('_route_params');
+
+            return $pathParameters[$name]
+                ?? $routeParameters[$name]
+                ?? $request->attributes->get($name);
+        }
+
+        return $this->parameterBag($request, $in)?->get($name);
     }
 
+    /**
+     * Select the HTTP parameter bag for a header, query, or cookie.
+     */
+    private function parameterBag(Request $request, string $location): HeaderBag|ParameterBag|null
+    {
+        $bags = [
+            self::HEADER => $request->headers,
+            'query' => $request->query,
+            'cookie' => $request->cookies,
+        ];
+
+        return $bags[$location] ?? null;
+    }
+
+    /**
+     * Follow parameter schema references before coercing request values.
+     */
     protected function expand(array $schema, Document $document): array
     {
-        for ($i = 0; $i < 10 && isset($schema['$ref']) && is_string($schema['$ref']); $i++) {
-            $resolved = $document->resolve($schema['$ref']);
+        $expanded = $schema;
+
+        for ($depth = 0; $depth < 10; $depth++) {
+            $reference = $expanded['$ref'] ?? null;
+
+            if (! is_string($reference)) {
+                break;
+            }
+
+            $resolved = $document->resolve($reference);
 
             if ($resolved === null) {
                 break;
             }
 
-            unset($schema['$ref']);
-            $schema = array_replace($resolved, $schema);
+            unset($expanded['$ref']);
+            $expanded = array_replace($resolved, $expanded);
         }
 
-        return $schema;
+        return $expanded;
     }
 
+    /**
+     * Convert a string parameter when the schema expects a numeric or boolean value.
+     */
     protected function cast(mixed $value, array $schema): mixed
     {
         if (! is_string($value)) {
@@ -293,82 +368,113 @@ class RequestValidator
         return match ($schema['type'] ?? null) {
             'integer' => preg_match('/^-?\d+$/', $value) ? (int) $value : $value,
             'number' => is_numeric($value) ? $value + 0 : $value,
-            'boolean' => match (strtolower($value)) {
-                'true', '1' => true,
-                'false', '0' => false,
-                default => $value,
-            },
+            'boolean' => $this->castBoolean($value),
             default => $value,
         };
     }
 
-    /** @return list<string> */
+    /**
+     * Recognize common boolean strings and leave other strings for validation.
+     */
+    private function castBoolean(string $value): bool|string
+    {
+        $booleans = ['true' => true, '1' => true, 'false' => false, '0' => false];
+
+        return $booleans[strtolower($value)] ?? $value;
+    }
+
+    /**
+     * Select the request body schema, decode the input, and validate the payload.
+     *
+     * @return list<string>
+     */
     protected function body(Request $request, array $body, Document $document): array
     {
-        if (isset($body['$ref'])) {
-            $body = $document->resolve($body['$ref']) ?? $body;
-        }
+        $reference = $body['$ref'] ?? null;
+        $spec = $reference === null ? $body : ($document->resolve($reference) ?? $body);
+        $content = $spec['content'] ?? [];
 
-        $content = $body['content'] ?? [];
-
-        if ($content === []) {
-            return [];
-        }
-
-        $type = strtolower(trim(explode(';', (string) $request->headers->get('Content-Type', 'application/json'))[0]));
-        $media = $content[$type]
-            ?? (str_starts_with($type, 'multipart/') ? ($content['multipart/form-data'] ?? null) : null)
-            ?? $content['application/json']
-            ?? reset($content);
+        [$declaredType] = explode(';', (string) $request->headers->get('Content-Type', self::JSON));
+        $type = strtolower(trim($declaredType));
+        $media = $this->bodyMedia($content, $type);
 
         if (! is_array($media) || ! isset($media['schema'])) {
             return [];
         }
 
         $raw = $request->getContent();
-        $payload = $this->decode($request, $type, is_string($raw) ? $raw : '');
+        $payload = $this->decode($request, $type, (string) $raw);
 
-        if (($body['required'] ?? false) && $payload === [] && ($raw === false || $raw === '') && $request->request->count() === 0 && $request->files->count() === 0) {
+        if (($spec['required'] ?? false) && $payload === [] && $this->emptyBody($request, $raw)) {
             return ['Request body is required.'];
         }
 
-        if ($message = $this->schemas->validate($payload, $media['schema'], $document)) {
-            return ["body: {$message}"];
-        }
+        $message = $this->schemas->validate($payload, $media['schema'], $document);
 
-        return [];
+        return $message ? ["body: {$message}"] : [];
     }
 
+    /**
+     * Pick the declared media type or the nearest supported fallback.
+     */
+    private function bodyMedia(array $content, string $type): mixed
+    {
+        $multipart = str_starts_with($type, 'multipart/')
+            ? ($content['multipart/form-data'] ?? null)
+            : null;
+
+        return $content[$type] ?? $multipart ?? $content[self::JSON] ?? reset($content);
+    }
+
+    /**
+     * Check whether the request has any raw content, fields, or file uploads.
+     */
+    private function emptyBody(Request $request, string|false $raw): bool
+    {
+        return ($raw === false || $raw === '')
+            && $request->request->count() === 0 && $request->files->count() === 0;
+    }
+
+    /**
+     * Read structured form or JSON data and fall back to parsed request fields.
+     */
     protected function decode(Request $request, string $contentType, string $raw): array
     {
-        if (str_starts_with($contentType, 'multipart/') || $contentType === 'application/x-www-form-urlencoded') {
-            $data = $request->request->all();
-
-            foreach ($request->files->all() as $key => $file) {
-                if (is_object($file) && method_exists($file, 'getClientOriginalName')) {
-                    $data[$key] = $file->getClientOriginalName();
-                } elseif (is_array($file)) {
-                    $data[$key] = array_map(function ($item) {
-                        return is_object($item) && method_exists($item, 'getClientOriginalName')
-                            ? $item->getClientOriginalName()
-                            : 'file';
-                    }, $file);
-                } else {
-                    $data[$key] = 'file';
-                }
-            }
-
-            return $data;
+        if (
+            str_starts_with($contentType, 'multipart/')
+            || $contentType === 'application/x-www-form-urlencoded'
+        ) {
+            return $this->formData($request);
         }
 
-        if ($raw !== '') {
-            $decoded = json_decode($raw, true);
+        $decoded = $raw === '' ? null : json_decode($raw, true);
 
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                return $decoded;
-            }
+        return is_array($decoded) ? $decoded : $request->request->all();
+    }
+
+    /**
+     * Combine form fields with the original names of uploaded files.
+     */
+    private function formData(Request $request): array
+    {
+        $data = $request->request->all();
+
+        foreach ($request->files->all() as $key => $file) {
+            $data[$key] = is_array($file)
+                ? array_map($this->fileName(...), $file)
+                : $this->fileName($file);
         }
 
-        return $request->request->all();
+        return $data;
+    }
+
+    /**
+     * Read the original upload name when the file object provides it.
+     */
+    private function fileName(mixed $file): string
+    {
+        return is_object($file) && method_exists($file, 'getClientOriginalName')
+            ? $file->getClientOriginalName()
+            : 'file';
     }
 }

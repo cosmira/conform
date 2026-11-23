@@ -2,24 +2,70 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Validation;
+namespace Cosmira\Conform\Validation;
 
-use Cosmira\OpenApi\Document\Document;
+use Cosmira\Conform\Document\Document;
 
 class SchemaValidator
 {
+    /**
+     * OpenAPI type name for a null value.
+     */
+    private const NULL = 'null';
+
+    /**
+     * OpenAPI type name for a JSON object.
+     */
+    private const OBJECT = 'object';
+
+    /**
+     * OpenAPI type name for a JSON array.
+     */
+    private const ARRAY = 'array';
+
+    /**
+     * OpenAPI type name for a string.
+     */
+    private const STRING = 'string';
+
+    /**
+     * OpenAPI type name for an integer.
+     */
+    private const INTEGER = 'integer';
+
+    /**
+     * OpenAPI type name for an integer or floating-point number.
+     */
+    private const NUMBER = 'number';
+
+    /**
+     * Document that provides the component and external reference targets.
+     */
     protected Document $document;
 
+    /**
+     * Current reference origin within a multi-file specification.
+     */
     protected ?string $from = null;
 
-    public function validate(mixed $data, array $schema, Document $document, ?string $from = null): ?string
-    {
+    /**
+     * Check a value against a schema and return its first error, if any.
+     */
+    public function validate(
+        mixed $data,
+        array $schema,
+        Document $document,
+        ?string $from = null,
+    ): ?string {
         $this->document = $document;
         $this->from = $from;
 
         return $this->check($data, $this->resolve($schema), '');
     }
 
+    /**
+     * Follow schema references and retain the origin for nested references.
+     */
     protected function resolve(array $schema, int $depth = 0): array
     {
         if ($depth > 20 || ! isset($schema['$ref']) || ! is_string($schema['$ref'])) {
@@ -39,69 +85,126 @@ class SchemaValidator
         return $this->resolve(array_replace($resolved, $schema), $depth + 1);
     }
 
+    /**
+     * Run literal, composition, and type checks in error priority order.
+     */
     protected function check(mixed $data, array $schema, string $path): ?string
     {
-        $schema = $this->resolve($schema);
+        $rules = $this->resolve($schema);
 
-        if (($schema['nullable'] ?? false) === true && $data === null) {
+        if (($rules['nullable'] ?? false) === true && $data === null) {
             return null;
         }
 
+        return $this->literalError($data, $rules, $path)
+            ?? $this->compositionError($data, $rules, $path)
+            ?? $this->typedError($data, $rules, $path);
+    }
+
+    /**
+     * Report mismatches against constant and enum values.
+     */
+    private function literalError(mixed $data, array $schema, string $path): ?string
+    {
         if (isset($schema['const']) && $data !== $schema['const']) {
-            return $this->error($path, 'must equal ' . json_encode($schema['const']));
+            return $this->error($path, 'must equal '.json_encode($schema['const']));
         }
 
         if (isset($schema['enum']) && ! in_array($data, $schema['enum'], true)) {
-            return $this->error($path, 'must be one of ' . json_encode($schema['enum']));
+            return $this->error($path, 'must be one of '.json_encode($schema['enum']));
         }
 
+        return null;
+    }
+
+    /**
+     * Apply discriminator and composition constraints before type checks.
+     */
+    private function compositionError(mixed $data, array $schema, string $path): ?string
+    {
         if (isset($schema['discriminator']) && is_array($data)) {
-            if ($error = $this->discriminator($data, $schema, $path)) {
+            $error = $this->discriminator($data, $schema, $path);
+
+            if ($error !== null) {
                 return $error;
             }
         }
 
-        if (isset($schema['allOf'])) {
-            foreach ($schema['allOf'] as $sub) {
-                if ($error = $this->check($data, $sub, $path)) {
-                    return $error;
-                }
+        return $this->allOfError($data, $schema['allOf'] ?? [], $path)
+            ?? $this->alternativesError($data, $schema, $path);
+    }
+
+    /**
+     * Return the first error from a schema required by allOf.
+     */
+    private function allOfError(mixed $data, array $schemas, string $path): ?string
+    {
+        foreach ($schemas as $schema) {
+            $error = $this->check($data, $schema, $path);
+
+            if ($error !== null) {
+                return $error;
             }
         }
 
-        if (isset($schema['anyOf'])) {
-            $matched = false;
+        return null;
+    }
 
-            foreach ($schema['anyOf'] as $sub) {
-                if ($this->check($data, $sub, $path) === null) {
-                    $matched = true;
-                    break;
-                }
-            }
-
-            if (! $matched) {
-                return $this->error($path, 'must match at least one schema');
-            }
+    /**
+     * Enforce the anyOf, oneOf, and not constraints.
+     */
+    private function alternativesError(mixed $data, array $schema, string $path): ?string
+    {
+        if (isset($schema['anyOf']) && ! $this->matchesAny($data, $schema['anyOf'], $path)) {
+            return $this->error($path, 'must match at least one schema');
         }
 
-        if (isset($schema['oneOf'])) {
-            $matches = 0;
-
-            foreach ($schema['oneOf'] as $sub) {
-                if ($this->check($data, $sub, $path) === null) {
-                    $matches++;
-                }
-            }
-
-            if ($matches !== 1) {
-                return $this->error($path, 'must match exactly one schema');
-            }
+        if (isset($schema['oneOf']) && $this->matchingCount($data, $schema['oneOf'], $path) !== 1) {
+            return $this->error($path, 'must match exactly one schema');
         }
 
         if (isset($schema['not']) && $this->check($data, $schema['not'], $path) === null) {
             return $this->error($path, 'must not match schema');
         }
 
+        return null;
+    }
+
+    /**
+     * Stop at the first valid schema alternative.
+     */
+    private function matchesAny(mixed $data, array $schemas, string $path): bool
+    {
+        foreach ($schemas as $schema) {
+            if ($this->check($data, $schema, $path) === null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Count every valid schema alternative for oneOf.
+     */
+    private function matchingCount(mixed $data, array $schemas, string $path): int
+    {
+        $matches = 0;
+
+        foreach ($schemas as $schema) {
+            if ($this->check($data, $schema, $path) === null) {
+                $matches++;
+            }
+        }
+
+        return $matches;
+    }
+
+    /**
+     * Check inferred structure or validate the explicit type constraints.
+     */
+    private function typedError(mixed $data, array $schema, string $path): ?string
+    {
         if (! isset($schema['type'])) {
             return $this->structure($data, $schema, $path);
         }
@@ -109,31 +212,52 @@ class SchemaValidator
         $types = (array) $schema['type'];
 
         if (($schema['nullable'] ?? false) === true) {
-            $types[] = 'null';
+            $types[] = self::NULL;
         }
 
         if (! $this->typeMatches($data, $types)) {
-            return $this->error($path, 'expected ' . implode('|', $types) . ', got ' . $this->typeName($data));
+            $actual = $this->typeName($data);
+
+            return $this->error($path, 'expected '.implode('|', $types).', got '.$actual);
         }
 
-        return match (true) {
-            in_array('object', $types, true) && is_array($data) && $this->isAssoc($data)
-                => $this->object($data, $schema, $path),
-            in_array('array', $types, true) && is_array($data) && ! $this->isAssoc($data)
-                => $this->array($data, $schema, $path),
-            in_array('string', $types, true) && is_string($data)
-                => $this->string($data, $schema, $path),
-            in_array('integer', $types, true) && is_int($data)
-                => $this->number($data, $schema, $path),
-            in_array('number', $types, true) && (is_int($data) || is_float($data))
-                => $this->number($data, $schema, $path),
-            default => null,
-        };
+        return $this->checkValue($data, $types, $schema, $path);
     }
 
+    /**
+     * Apply type-specific constraints after confirming that a type matches.
+     */
+    private function checkValue(mixed $data, array $types, array $schema, string $path): ?string
+    {
+        $actual = $this->typeName($data);
+        $expected = $actual === self::INTEGER && in_array(self::NUMBER, $types, true)
+            ? self::NUMBER
+            : $actual;
+
+        if (! in_array($expected, $types, true) || is_object($data)) {
+            return null;
+        }
+
+        $checks = [
+            self::OBJECT => $this->object(...),
+            self::ARRAY => $this->array(...),
+            self::STRING => $this->string(...),
+            self::INTEGER => $this->number(...),
+            self::NUMBER => $this->number(...),
+        ];
+
+        $check = $checks[$expected] ?? null;
+
+        return $check === null ? null : $check($data, $schema, $path);
+    }
+
+    /**
+     * Follow the schema selected by the discriminator property.
+     */
     protected function discriminator(array $data, array $schema, string $path): ?string
     {
-        $property = $schema['discriminator']['propertyName'] ?? null;
+        $discriminator = $schema['discriminator'];
+        $property = $discriminator['propertyName'] ?? null;
 
         if (! is_string($property) || $property === '') {
             return null;
@@ -144,15 +268,15 @@ class SchemaValidator
         }
 
         $value = $data[$property];
-        $mapping = $schema['discriminator']['mapping'] ?? [];
-        $ref = $mapping[$value] ?? (is_string($value) ? '#/components/schemas/' . $value : null);
+        $mapping = $discriminator['mapping'] ?? [];
+        $ref = $mapping[$value] ?? (is_string($value) ? '#/components/schemas/'.$value : null);
 
         if (! is_string($ref)) {
             return null;
         }
 
-        if (! str_contains($ref, '#') && ! str_starts_with($ref, '#')) {
-            $ref = '#/components/schemas/' . $ref;
+        if (! str_contains($ref, '#')) {
+            $ref = '#/components/schemas/'.$ref;
         }
 
         $target = $this->document->resolve($ref, $this->from);
@@ -166,9 +290,12 @@ class SchemaValidator
         return $this->check($data, $target, $path);
     }
 
+    /**
+     * Infer object or array constraints when a schema omits its type.
+     */
     protected function structure(mixed $data, array $schema, string $path): ?string
     {
-        if (isset($schema['properties']) || isset($schema['required']) || array_key_exists('additionalProperties', $schema)) {
+        if ($this->hasObjectRules($schema)) {
             return is_array($data) && $this->isAssoc($data)
                 ? $this->object($data, $schema, $path)
                 : $this->error($path, 'expected object');
@@ -183,39 +310,62 @@ class SchemaValidator
         return null;
     }
 
+    /**
+     * Detect keywords that imply an object in an untyped schema.
+     */
+    private function hasObjectRules(array $schema): bool
+    {
+        return isset($schema['properties']) || isset($schema['required'])
+            || array_key_exists('additionalProperties', $schema);
+    }
+
+    /**
+     * Check object size, required keys, and property schemas.
+     */
     protected function object(array $data, array $schema, string $path): ?string
     {
-        if (isset($schema['minProperties']) && count($data) < $schema['minProperties']) {
-            return $this->error($path, "minProperties {$schema['minProperties']}");
-        }
+        return $this->boundsError(count($data), $schema, 'minProperties', 'maxProperties', $path)
+            ?? $this->requiredPropertyError($data, $schema['required'] ?? [], $path)
+            ?? $this->objectValuesError($data, $schema, $path);
+    }
 
-        if (isset($schema['maxProperties']) && count($data) > $schema['maxProperties']) {
-            return $this->error($path, "maxProperties {$schema['maxProperties']}");
-        }
-
-        foreach ($schema['required'] ?? [] as $key) {
+    /**
+     * Return the first declared property missing from the object.
+     */
+    private function requiredPropertyError(array $data, array $required, string $path): ?string
+    {
+        foreach ($required as $key) {
             if (! array_key_exists($key, $data)) {
                 return $this->error($path, "missing required property [{$key}]");
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Check defined properties and apply the additional-property policy.
+     */
+    private function objectValuesError(array $data, array $schema, string $path): ?string
+    {
         $properties = $schema['properties'] ?? [];
+        $additional = $schema['additionalProperties'] ?? true;
 
         foreach ($data as $key => $value) {
-            if (isset($properties[$key])) {
-                if ($error = $this->check($value, $properties[$key], $this->join($path, (string) $key))) {
-                    return $error;
-                }
-                continue;
-            }
+            $defined = isset($properties[$key]);
+            $rules = $properties[$key] ?? $additional;
 
-            $additional = $schema['additionalProperties'] ?? true;
-
-            if ($additional === false) {
+            if (! $defined && $rules === false) {
                 return $this->error($path, "unexpected property [{$key}]");
             }
 
-            if (is_array($additional) && $error = $this->check($value, $additional, $this->join($path, (string) $key))) {
+            if (! $defined && ! is_array($rules)) {
+                continue;
+            }
+
+            $error = $this->check($value, $rules, $this->join($path, (string) $key));
+
+            if ($error !== null) {
                 return $error;
             }
         }
@@ -223,29 +373,45 @@ class SchemaValidator
         return null;
     }
 
+    /**
+     * Check array length, uniqueness, and item schemas.
+     */
     protected function array(array $data, array $schema, string $path): ?string
     {
-        if (isset($schema['minItems']) && count($data) < $schema['minItems']) {
-            return $this->error($path, "minItems {$schema['minItems']}");
+        return $this->boundsError(count($data), $schema, 'minItems', 'maxItems', $path)
+            ?? $this->duplicateItemError($data, $schema, $path)
+            ?? $this->itemError($data, $schema, $path);
+    }
+
+    /**
+     * Detect duplicate JSON values when the schema requires unique items.
+     */
+    private function duplicateItemError(array $data, array $schema, string $path): ?string
+    {
+        if (($schema['uniqueItems'] ?? false) !== true) {
+            return null;
         }
 
-        if (isset($schema['maxItems']) && count($data) > $schema['maxItems']) {
-            return $this->error($path, "maxItems {$schema['maxItems']}");
-        }
+        $encoded = array_map(json_encode(...), $data);
 
-        if (($schema['uniqueItems'] ?? false) === true) {
-            $encoded = array_map(fn ($item) => json_encode($item), $data);
-            if (count($encoded) !== count(array_unique($encoded))) {
-                return $this->error($path, 'uniqueItems');
-            }
-        }
+        return count($encoded) === count(array_unique($encoded))
+            ? null
+            : $this->error($path, 'uniqueItems');
+    }
 
+    /**
+     * Return the first item error with its array index.
+     */
+    private function itemError(array $data, array $schema, string $path): ?string
+    {
         if (! isset($schema['items'])) {
             return null;
         }
 
-        foreach ($data as $i => $item) {
-            if ($error = $this->check($item, $schema['items'], $this->join($path, "[{$i}]"))) {
+        foreach ($data as $index => $item) {
+            $error = $this->check($item, $schema['items'], $this->join($path, "[{$index}]"));
+
+            if ($error !== null) {
                 return $error;
             }
         }
@@ -253,91 +419,137 @@ class SchemaValidator
         return null;
     }
 
+    /**
+     * Check string length, pattern, and format constraints.
+     */
     protected function string(string $data, array $schema, string $path): ?string
     {
-        if (isset($schema['minLength']) && mb_strlen($data) < $schema['minLength']) {
-            return $this->error($path, "minLength {$schema['minLength']}");
+        $length = mb_strlen($data);
+        $lengthError = $this->boundsError($length, $schema, 'minLength', 'maxLength', $path);
+
+        if ($lengthError !== null) {
+            return $lengthError;
         }
 
-        if (isset($schema['maxLength']) && mb_strlen($data) > $schema['maxLength']) {
-            return $this->error($path, "maxLength {$schema['maxLength']}");
-        }
-
-        if (isset($schema['pattern']) && @preg_match('/' . $schema['pattern'] . '/u', $data) !== 1) {
+        if (isset($schema['pattern']) && ! Pattern::matches((string) $schema['pattern'], $data)) {
             return $this->error($path, 'pattern mismatch');
         }
 
         return isset($schema['format']) ? $this->format($data, $schema['format'], $path) : null;
     }
 
+    /**
+     * Check inclusive and exclusive numeric bounds in order.
+     */
     protected function number(int|float $data, array $schema, string $path): ?string
     {
-        if (isset($schema['minimum']) && $data < $schema['minimum']) {
-            return $this->error($path, "minimum {$schema['minimum']}");
+        return $this->boundsError($data, $schema, 'minimum', 'maximum', $path)
+            ?? $this->exclusiveBoundsError($data, $schema, $path);
+    }
+
+    /**
+     * Check minimum and maximum values using the supplied schema keywords.
+     */
+    private function boundsError(
+        int|float $value,
+        array $schema,
+        string $minimum,
+        string $maximum,
+        string $path,
+    ): ?string {
+        if (isset($schema[$minimum]) && $value < $schema[$minimum]) {
+            return $this->error($path, "{$minimum} {$schema[$minimum]}");
         }
 
-        if (isset($schema['maximum']) && $data > $schema['maximum']) {
-            return $this->error($path, "maximum {$schema['maximum']}");
-        }
-
-        if (($schema['exclusiveMinimum'] ?? null) === true && isset($schema['minimum']) && $data <= $schema['minimum']) {
-            return $this->error($path, "exclusiveMinimum {$schema['minimum']}");
-        }
-
-        if (is_numeric($schema['exclusiveMinimum'] ?? null) && $data <= $schema['exclusiveMinimum']) {
-            return $this->error($path, "exclusiveMinimum {$schema['exclusiveMinimum']}");
-        }
-
-        if (($schema['exclusiveMaximum'] ?? null) === true && isset($schema['maximum']) && $data >= $schema['maximum']) {
-            return $this->error($path, "exclusiveMaximum {$schema['maximum']}");
-        }
-
-        if (is_numeric($schema['exclusiveMaximum'] ?? null) && $data >= $schema['exclusiveMaximum']) {
-            return $this->error($path, "exclusiveMaximum {$schema['exclusiveMaximum']}");
+        if (isset($schema[$maximum]) && $value > $schema[$maximum]) {
+            return $this->error($path, "{$maximum} {$schema[$maximum]}");
         }
 
         return null;
     }
 
-    protected function format(string $data, string $format, string $path): ?string
+    /**
+     * Check strict numeric bounds in both supported representations.
+     */
+    private function exclusiveBoundsError(int|float $data, array $schema, string $path): ?string
     {
-        $ok = match ($format) {
-            'email' => filter_var($data, FILTER_VALIDATE_EMAIL) !== false,
-            'uri', 'url' => filter_var($data, FILTER_VALIDATE_URL) !== false,
-            'uuid', 'guid' => (bool) preg_match(
-                '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
-                $data
-            ),
-            'date' => (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $data),
-            'date-time' => (bool) preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/', $data),
-            'date-time-micro', 'date-time-microtime' => (bool) preg_match(
-                '/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?/',
-                $data
-            ),
-            'unixtime' => (bool) preg_match('/^\d+$/', $data),
-            // binary, color, json, checksum, timezone — accept any string
-            'binary', 'byte', 'password', 'color', 'json', 'checksum', 'timezone' => true,
-            default => true,
-        };
+        $minimum = $this->exclusiveBound(
+            $schema['exclusiveMinimum'] ?? null,
+            $schema['minimum'] ?? null,
+        );
+        $maximum = $this->exclusiveBound(
+            $schema['exclusiveMaximum'] ?? null,
+            $schema['maximum'] ?? null,
+        );
 
-        return $ok ? null : $this->error($path, "invalid {$format}");
+        if ($minimum !== null && $data <= $minimum) {
+            return $this->error($path, "exclusiveMinimum {$minimum}");
+        }
+
+        if ($maximum !== null && $data >= $maximum) {
+            return $this->error($path, "exclusiveMaximum {$maximum}");
+        }
+
+        return null;
     }
 
+    /**
+     * Read a numeric exclusive bound or reuse its inclusive keyword value.
+     */
+    private function exclusiveBound(mixed $exclusive, mixed $inclusive): mixed
+    {
+        if ($exclusive === true) {
+            return $inclusive;
+        }
+
+        return is_numeric($exclusive) ? $exclusive : null;
+    }
+
+    /**
+     * Check a known string format and accept unrecognized format annotations.
+     */
+    protected function format(string $data, string $format, string $path): ?string
+    {
+        $filters = [
+            'email' => FILTER_VALIDATE_EMAIL,
+            'uri' => FILTER_VALIDATE_URL,
+            'url' => FILTER_VALIDATE_URL,
+        ];
+
+        $valid = isset($filters[$format])
+            ? filter_var($data, $filters[$format]) !== false
+            : $this->matchesFormatPattern($data, $format);
+
+        return $valid ? null : $this->error($path, "invalid {$format}");
+    }
+
+    /**
+     * Check formats described by a fixed regular expression.
+     */
+    private function matchesFormatPattern(string $data, string $format): bool
+    {
+        $uuid = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
+        $microtime = '/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?/';
+        $patterns = [
+            'uuid' => $uuid,
+            'guid' => $uuid,
+            'date' => '/^\d{4}-\d{2}-\d{2}$/',
+            'date-time' => '/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/',
+            'date-time-micro' => $microtime,
+            'date-time-microtime' => $microtime,
+            'unixtime' => '/^\d+$/',
+        ];
+
+        return ! isset($patterns[$format]) || preg_match($patterns[$format], $data) === 1;
+    }
+
+    /**
+     * Test whether the value satisfies at least one declared type.
+     */
     protected function typeMatches(mixed $data, array $types): bool
     {
         foreach ($types as $type) {
-            $ok = match ($type) {
-                'null' => $data === null,
-                'boolean' => is_bool($data),
-                'object' => is_array($data) && $this->isAssoc($data),
-                'array' => is_array($data) && ! $this->isAssoc($data),
-                'string' => is_string($data),
-                'integer' => is_int($data),
-                'number' => is_int($data) || is_float($data),
-                default => true,
-            };
-
-            if ($ok) {
+            if ($this->matchesType($data, $type)) {
                 return true;
             }
         }
@@ -345,29 +557,61 @@ class SchemaValidator
         return false;
     }
 
+    /**
+     * Match one OpenAPI type against its PHP representation.
+     */
+    private function matchesType(mixed $data, mixed $type): bool
+    {
+        $checks = [
+            self::NULL => is_null(...),
+            'boolean' => is_bool(...),
+            self::OBJECT => fn (mixed $value): bool => is_array($value) && $this->isAssoc($value),
+            self::ARRAY => fn (mixed $value): bool => is_array($value) && ! $this->isAssoc($value),
+            self::STRING => is_string(...),
+            self::INTEGER => is_int(...),
+            self::NUMBER => static fn (mixed $value): bool => is_int($value) || is_float($value),
+        ];
+
+        $check = is_string($type) ? ($checks[$type] ?? null) : null;
+
+        return $check === null || $check($data);
+    }
+
+    /**
+     * Recognize JSON objects decoded as arrays, including empty objects.
+     */
     protected function isAssoc(array $data): bool
     {
         return $data === [] || array_keys($data) !== range(0, count($data) - 1);
     }
 
+    /**
+     * Describe the PHP value using the names used in validation errors.
+     */
     protected function typeName(mixed $data): string
     {
-        return match (true) {
-            $data === null => 'null',
-            is_bool($data) => 'boolean',
-            is_int($data) => 'integer',
-            is_float($data) => 'number',
-            is_string($data) => 'string',
-            is_array($data) => $this->isAssoc($data) ? 'object' : 'array',
+        if (is_array($data)) {
+            return $this->isAssoc($data) ? self::OBJECT : self::ARRAY;
+        }
+
+        return match (gettype($data)) {
+            'NULL' => self::NULL,
+            'double' => self::NUMBER,
             default => gettype($data),
         };
     }
 
+    /**
+     * Prefix the validation message with its location when available.
+     */
     protected function error(string $path, string $message): string
     {
         return $path === '' ? $message : "{$path}: {$message}";
     }
 
+    /**
+     * Append an object property or array index to a validation path.
+     */
     protected function join(string $path, string $segment): string
     {
         if ($segment === '' || str_starts_with($segment, '[')) {

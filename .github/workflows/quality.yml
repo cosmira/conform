@@ -1,0 +1,53 @@
+name: Quality Assurance
+
+on:
+  push:
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: dom, mbstring, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+      - run: composer validate --strict --no-check-lock
+      - run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Check PHP syntax
+        run: find src tests tools -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Analyse OpenAPI validators and tests
+        run: composer test:types
+      - name: Check Rector rules without rewriting files
+        run: composer test:rector
+      - name: Check source quality with Soda
+        run: |
+          mkdir -p "$RUNNER_TEMP/soda"
+          composer --working-dir="$RUNNER_TEMP/soda" require cosmira/soda:1.6.0 --no-interaction --no-progress
+          php "$RUNNER_TEMP/soda/vendor/bin/soda" quality
+      - name: Run validation benchmark
+        run: |
+          mkdir -p build
+          composer --no-ansi benchmark > build/benchmark.json
+          jq -e '.scenarios | map_values(.median_us)' build/benchmark.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: conform-benchmark
+          path: build/benchmark.json
+          if-no-files-found: error
