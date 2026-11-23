@@ -69,3 +69,34 @@ jobs:
           name: tests-${{ matrix.os }}-php${{ matrix.php }}-${{ matrix.dependencies }}
           path: build/phpunit.xml
           if-no-files-found: warn
+
+  laravel:
+    name: Laravel ${{ matrix.laravel }} / PHP ${{ matrix.php }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - laravel: '12'
+            php: '8.2'
+          - laravel: '13'
+            php: '8.6'
+    defaults:
+      run:
+        working-directory: tests/laravel
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '${{ matrix.php }}'
+          extensions: dom, mbstring, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+      - name: Install the Laravel test application
+        env:
+          LARAVEL_VERSION: ${{ matrix.laravel }}
+        run: composer update --with "laravel/framework:^${LARAVEL_VERSION}" --prefer-dist --no-interaction --no-progress
+      - run: composer test

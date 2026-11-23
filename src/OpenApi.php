@@ -203,6 +203,19 @@ class OpenApi
             return [];
         }
 
+        return $this->requestForMatch($request, $match);
+    }
+
+    /**
+     * Validate a request using the operation returned by match().
+     *
+     * @param  array{operation: array, pathItem: array, parameters: array<string, string>}  $match
+     * @return list<string>
+     *
+     * @internal
+     */
+    public function requestForMatch(Request $request, array $match): array
+    {
         return $this->requests->validate(
             $request,
             $match['operation'],
@@ -225,6 +238,19 @@ class OpenApi
             return [];
         }
 
+        return $this->responseForMatch($response, $match);
+    }
+
+    /**
+     * Validate a response using the same operation that validated its request.
+     *
+     * @param  array{operation: array}  $match
+     * @return list<string>
+     *
+     * @internal
+     */
+    public function responseForMatch(Response $response, array $match): array
+    {
         return $this->responses->validate($response, $match['operation'], $this->document);
     }
 

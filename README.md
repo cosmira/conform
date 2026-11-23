@@ -71,14 +71,31 @@ return HTTP `422`. Invalid responses are reported through Laravel.
 return [
     'path' => resource_path('openapi'),
     'enabled' => (bool) env('APP_DEBUG', false),
+    'strict' => false,
 ];
 ```
 
 Set `enabled` to `false` to disable validation even in debug mode.
 Set the optional `base_path` key if your API uses a prefix other than `api`.
 
-Conform validates exchanges where the request matches an OpenAPI operation.
-Unmatched requests pass through. Response mismatches are reported to Laravel.
+### Strict mode in tests
+
+Set `conform.strict` to `true` and keep `conform.enabled` on. Conform throws
+`Cosmira\Conform\Laravel\ContractViolation` when the HTTP method and path have
+no OpenAPI operation or the response fails validation.
+
+Use Laravel's `withoutExceptionHandling()` in the test to let the exception
+reach PHPUnit directly.
+
+```php
+config(['conform.enabled' => true, 'conform.strict' => true]);
+$this->withoutExceptionHandling();
+
+$this->getJson('/api/pets/42')->assertOk();
+```
+
+In default mode, unmatched requests pass through and Laravel receives a report
+for invalid responses. Invalid requests return HTTP `422` in either mode.
 Test coverage depends on which operations the suite exercises and which
 constraints the OpenAPI document declares.
 
@@ -123,6 +140,13 @@ and example assertions.
 ```bash
 composer install
 composer test
+```
+
+Run the Laravel feature suite in its own Composer project.
+
+```bash
+composer --working-dir=tests/laravel install
+composer --working-dir=tests/laravel test
 ```
 
 Run Rector in check mode with `composer test:rector`. The rules target PHP 8.2

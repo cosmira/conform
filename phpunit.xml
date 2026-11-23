@@ -7,6 +7,7 @@
     <testsuites>
         <testsuite name="Conform">
             <directory>tests</directory>
+            <exclude>tests/laravel</exclude>
         </testsuite>
     </testsuites>
     <source>
