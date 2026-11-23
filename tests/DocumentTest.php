@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\Reader\Reader;
+use Cosmira\Conform\Reader\Reader;
 use PHPUnit\Framework\TestCase;
 
 class DocumentTest extends TestCase
 {
     public function test_accessors_and_resolve(): void
     {
-        $document = Reader::file(__DIR__ . '/fixtures/full.yaml');
+        $document = Reader::file(__DIR__.'/fixtures/full.yaml');
 
         $this->assertSame('3.0.3', $document->version());
         $this->assertArrayHasKey('/pets', $document->paths());

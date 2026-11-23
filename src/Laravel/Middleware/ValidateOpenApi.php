@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Laravel\Middleware;
+namespace Cosmira\Conform\Laravel\Middleware;
 
 use Closure;
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -40,7 +40,7 @@ class ValidateOpenApi
 
         if ($errors !== []) {
             report(new \RuntimeException(
-                'OpenAPI response mismatch: ' . implode(' | ', $errors)
+                'OpenAPI response mismatch: '.implode(' | ', $errors)
             ));
         }
 

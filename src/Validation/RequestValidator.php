@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Validation;
+namespace Cosmira\Conform\Validation;
 
-use Cosmira\OpenApi\Document\Document;
+use Cosmira\Conform\Document\Document;
 use Symfony\Component\HttpFoundation\Request;
 
 class RequestValidator
@@ -248,7 +248,7 @@ class RequestValidator
                 continue;
             }
 
-            $resolved[$parameter['in'] . ':' . $parameter['name']] = $parameter;
+            $resolved[$parameter['in'].':'.$parameter['name']] = $parameter;
         }
 
         return array_values($resolved);

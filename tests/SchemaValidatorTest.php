@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\Document\Document;
-use Cosmira\OpenApi\Reader\Reader;
-use Cosmira\OpenApi\Validation\SchemaValidator;
+use Cosmira\Conform\Document\Document;
+use Cosmira\Conform\Reader\Reader;
+use Cosmira\Conform\Validation\SchemaValidator;
 use PHPUnit\Framework\TestCase;
 
 class SchemaValidatorTest extends TestCase
@@ -18,7 +18,7 @@ class SchemaValidatorTest extends TestCase
     protected function setUp(): void
     {
         $this->validator = new SchemaValidator;
-        $this->document = Reader::file(__DIR__ . '/fixtures/petstore.yaml');
+        $this->document = Reader::file(__DIR__.'/fixtures/petstore.yaml');
     }
 
     public function test_valid_object(): void

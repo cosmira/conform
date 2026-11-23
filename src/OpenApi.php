@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi;
+namespace Cosmira\Conform;
 
-use Cosmira\OpenApi\Document\Document;
-use Cosmira\OpenApi\Reader\Reader;
-use Cosmira\OpenApi\Validation\RequestValidator;
-use Cosmira\OpenApi\Validation\ResponseValidator;
+use Cosmira\Conform\Document\Document;
+use Cosmira\Conform\Reader\Reader;
+use Cosmira\Conform\Validation\RequestValidator;
+use Cosmira\Conform\Validation\ResponseValidator;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/** @phpstan-consistent-constructor */
 class OpenApi
 {
     protected string $basePath = '';
@@ -68,7 +69,7 @@ class OpenApi
                 return '([^/]+)';
             }, $spec);
 
-            if (! preg_match('#^' . $pattern . '$#', $path, $matches)) {
+            if (! preg_match('#^'.$pattern.'$#', $path, $matches)) {
                 continue;
             }
 
@@ -128,19 +129,19 @@ class OpenApi
 
     protected function normalize(string $path): string
     {
-        $path = '/' . ltrim($path, '/');
+        $path = '/'.ltrim($path, '/');
 
         if ($this->basePath === '') {
             return $path;
         }
 
-        $prefix = '/' . $this->basePath;
+        $prefix = '/'.$this->basePath;
 
         if ($path === $prefix) {
             return '/';
         }
 
-        if (str_starts_with($path, $prefix . '/')) {
+        if (str_starts_with($path, $prefix.'/')) {
             return substr($path, strlen($prefix)) ?: '/';
         }
 

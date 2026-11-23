@@ -1,5 +1,5 @@
 {
-    "name": "cosmira/openapi",
+    "name": "cosmira/conform",
     "description": "OpenAPI 3.0 request and response validator for PHP and Laravel",
     "type": "library",
     "license": "MIT",
@@ -17,34 +17,34 @@
     ],
     "require": {
         "php": "^8.2",
-        "illuminate/support": "^10.0|^11.0|^12.0",
-        "symfony/yaml": "^6.0|^7.0",
-        "symfony/finder": "^6.0|^7.0",
-        "symfony/http-foundation": "^6.0|^7.0"
+        "illuminate/support": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+        "symfony/yaml": "^6.0 || ^7.0 || ^8.0",
+        "symfony/finder": "^6.0 || ^7.0 || ^8.0",
+        "symfony/http-foundation": "^6.0 || ^7.0 || ^8.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.0",
-        "infection/infection": "^0.29"
+        "phpunit/phpunit": "^11.0 || ^12.0 || ^13.0",
+        "infection/infection": "^0.29 || ^0.35"
     },
     "autoload": {
         "psr-4": {
-            "Cosmira\\OpenApi\\": "src/"
+            "Cosmira\\Conform\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Cosmira\\OpenApi\\Tests\\": "tests/"
+            "Cosmira\\Conform\\Tests\\": "tests/"
         }
     },
     "scripts": {
-        "test": "phpunit",
-        "test:coverage": "phpunit --coverage-text",
-        "mutate": "infection --threads=max --min-msi=95 --min-covered-msi=95 --show-mutations"
+        "test": "@php vendor/bin/phpunit",
+        "test:coverage": "@php vendor/bin/phpunit --coverage-text",
+        "mutate": "@php vendor/bin/infection --threads=max --min-msi=95 --min-covered-msi=95 --show-mutations"
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Cosmira\\OpenApi\\Laravel\\OpenApiServiceProvider"
+                "Cosmira\\Conform\\Laravel\\OpenApiServiceProvider"
             ]
         }
     },

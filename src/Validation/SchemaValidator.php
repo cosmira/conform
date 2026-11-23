@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Validation;
+namespace Cosmira\Conform\Validation;
 
-use Cosmira\OpenApi\Document\Document;
+use Cosmira\Conform\Document\Document;
 
 class SchemaValidator
 {
@@ -48,11 +48,11 @@ class SchemaValidator
         }
 
         if (isset($schema['const']) && $data !== $schema['const']) {
-            return $this->error($path, 'must equal ' . json_encode($schema['const']));
+            return $this->error($path, 'must equal '.json_encode($schema['const']));
         }
 
         if (isset($schema['enum']) && ! in_array($data, $schema['enum'], true)) {
-            return $this->error($path, 'must be one of ' . json_encode($schema['enum']));
+            return $this->error($path, 'must be one of '.json_encode($schema['enum']));
         }
 
         if (isset($schema['discriminator']) && is_array($data)) {
@@ -113,20 +113,15 @@ class SchemaValidator
         }
 
         if (! $this->typeMatches($data, $types)) {
-            return $this->error($path, 'expected ' . implode('|', $types) . ', got ' . $this->typeName($data));
+            return $this->error($path, 'expected '.implode('|', $types).', got '.$this->typeName($data));
         }
 
         return match (true) {
-            in_array('object', $types, true) && is_array($data) && $this->isAssoc($data)
-                => $this->object($data, $schema, $path),
-            in_array('array', $types, true) && is_array($data) && ! $this->isAssoc($data)
-                => $this->array($data, $schema, $path),
-            in_array('string', $types, true) && is_string($data)
-                => $this->string($data, $schema, $path),
-            in_array('integer', $types, true) && is_int($data)
-                => $this->number($data, $schema, $path),
-            in_array('number', $types, true) && (is_int($data) || is_float($data))
-                => $this->number($data, $schema, $path),
+            in_array('object', $types, true) && is_array($data) && $this->isAssoc($data) => $this->object($data, $schema, $path),
+            in_array('array', $types, true) && is_array($data) && ! $this->isAssoc($data) => $this->array($data, $schema, $path),
+            in_array('string', $types, true) && is_string($data) => $this->string($data, $schema, $path),
+            in_array('integer', $types, true) && is_int($data) => $this->number($data, $schema, $path),
+            in_array('number', $types, true) && (is_int($data) || is_float($data)) => $this->number($data, $schema, $path),
             default => null,
         };
     }
@@ -145,14 +140,14 @@ class SchemaValidator
 
         $value = $data[$property];
         $mapping = $schema['discriminator']['mapping'] ?? [];
-        $ref = $mapping[$value] ?? (is_string($value) ? '#/components/schemas/' . $value : null);
+        $ref = $mapping[$value] ?? (is_string($value) ? '#/components/schemas/'.$value : null);
 
         if (! is_string($ref)) {
             return null;
         }
 
         if (! str_contains($ref, '#') && ! str_starts_with($ref, '#')) {
-            $ref = '#/components/schemas/' . $ref;
+            $ref = '#/components/schemas/'.$ref;
         }
 
         $target = $this->document->resolve($ref, $this->from);
@@ -206,6 +201,7 @@ class SchemaValidator
                 if ($error = $this->check($value, $properties[$key], $this->join($path, (string) $key))) {
                     return $error;
                 }
+
                 continue;
             }
 
@@ -263,7 +259,7 @@ class SchemaValidator
             return $this->error($path, "maxLength {$schema['maxLength']}");
         }
 
-        if (isset($schema['pattern']) && @preg_match('/' . $schema['pattern'] . '/u', $data) !== 1) {
+        if (isset($schema['pattern']) && @preg_match('/'.$schema['pattern'].'/u', $data) !== 1) {
             return $this->error($path, 'pattern mismatch');
         }
 

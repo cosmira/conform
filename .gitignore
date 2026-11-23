@@ -2,6 +2,7 @@
 /composer.lock
 /.phpunit.cache/
 /coverage/
+/build/
 /infection.log
 /infection.html
 /infection.json

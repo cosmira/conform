@@ -1,17 +1,32 @@
-# Cosmira OpenAPI
+# Conform
 
-Validate HTTP requests and responses against OpenAPI 3.0 documents.
+Conform validates HTTP requests and responses against OpenAPI 3.0 documents
+in PHP and Laravel.
 
 ## Installation
 
 ```bash
-composer require cosmira/openapi
+composer require cosmira/conform
 ```
+
+## Compatibility
+
+| Dependency | Supported versions |
+| --- | --- |
+| PHP | 8.2 and later in the 8.x series |
+| Illuminate Support | 10, 11, 12, 13 |
+| Symfony Finder, HttpFoundation, and YAML | 6, 7, 8 |
+
+Composer selects versions compatible with your PHP version.
+[GitHub Actions](.github/workflows/phpunit.yml) tests PHP 8.2 through 8.6 on Linux
+and PHP 8.5 on Windows. It also tests the lowest resolvable dependencies on
+PHP 8.2. The PHP 8.6 job requires Illuminate 13, Symfony 8, PHPUnit 13, and
+Infection 0.35.
 
 ## Usage
 
 ```php
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 
 $api = OpenApi::from('openapi.yaml'); // or a directory of YAML/JSON files
 
@@ -40,7 +55,7 @@ php artisan vendor:publish --tag=openapi-config
 
 ```php
 $middleware->alias([
-    'openapi' => \Cosmira\OpenApi\Laravel\Middleware\ValidateOpenApi::class,
+    'openapi' => \Cosmira\Conform\Laravel\Middleware\ValidateOpenApi::class,
 ]);
 
 Route::middleware('openapi')->group(function () {
@@ -61,18 +76,24 @@ return [
 ## What is validated
 
 | Area | Support |
-|------|---------|
+| --- | --- |
 | Multi-file `$ref` | `common.yaml#/…`, `../common.yaml#/…` |
 | Path params | From URI template |
 | Query / header / cookie params | Yes |
 | JSON body | Yes |
-| `multipart/form-data` / `x-www-form-urlencoded` | Yes (form fields + file names) |
+| `multipart/form-data`, `x-www-form-urlencoded` | Fields and file names |
 | Response status | `200` → `2XX` → `default` |
 | JSON response body | Yes |
 | Response headers | Yes (when required / schema present) |
 | Security `apiKey` | header / query / cookie presence |
 | Security `http` bearer/basic | Authorization presence |
-| Schema | `$ref`, types, formats (uuid/guid, date-time-micro, unixtime, binary, email, …), enum, bounds, required, properties, additionalProperties, items, nullable, allOf/oneOf/anyOf/not, discriminator |
+| Schema references and composition | `$ref`, `allOf`, `oneOf`, `anyOf`, `not` |
+| Schema values | Types, formats, enums, bounds, `nullable` |
+| Schema structure | `required`, `properties`, `additionalProperties`, `items` |
+| Polymorphism | `discriminator` |
+
+Supported formats include UUID, GUID, `date-time-micro`, `unixtime`, `binary`,
+and `email`.
 
 ## Read
 
@@ -85,7 +106,8 @@ $api->document()->get('components.securitySchemes.authToken');
 
 ## Not implemented
 
-Callbacks execution, Link runtime expressions, OAuth token flows, XML wire format, example assertions.
+Callback execution, Link runtime expressions, OAuth token flows, XML wire format,
+and example assertions.
 
 ## Testing
 
@@ -94,19 +116,22 @@ composer install
 composer test
 ```
 
-Coverage (needs `pcov` or `xdebug`):
+For coverage and mutation testing, enable PCOV or Xdebug.
 
 ```bash
 composer test:coverage
 ```
 
-Mutation testing ([Infection](https://infection.github.io/guide/), MSI ≥ 95%, all CPU threads):
+Run [Infection](https://infection.github.io/guide/) with Composer.
 
 ```bash
 composer mutate
-# equivalent:
-vendor/bin/infection --threads=max --min-msi=95 --min-covered-msi=95
 ```
+
+Infection runs PHPUnit before generating mutations. `composer mutate` requires
+95% for both the overall and covered mutation scores.
+[The CI mutation job](.github/workflows/mutation.yml) enforces a 60% baseline on
+both scores and uploads the report. See `infection-summary.log` for local results.
 
 ## License
 

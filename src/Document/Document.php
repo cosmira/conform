@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Document;
+namespace Cosmira\Conform\Document;
 
 use Illuminate\Support\Arr;
 
@@ -144,6 +144,7 @@ class Document
 
             if ($part === '..') {
                 array_pop($parts);
+
                 continue;
             }
 

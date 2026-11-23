@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\OpenApi;
-use Cosmira\OpenApi\Reader\Reader;
+use Cosmira\Conform\OpenApi;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,7 +15,7 @@ class MultiFileTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->api = OpenApi::from(__DIR__ . '/fixtures/multifile')->basePath('xapi');
+        $this->api = OpenApi::from(__DIR__.'/fixtures/multifile')->basePath('xapi');
     }
 
     public function test_loads_all_files_into_registry(): void
@@ -98,12 +97,16 @@ class MultiFileTest extends TestCase
 
         $this->assertSame([], $this->api->response($ok, $request));
 
-        $unauthorized = new Response(json_encode([
-            'code' => 'unauthorized',
+        $notFound = new Response(json_encode([
+            'code' => 'not_found',
             'message' => 'Nope',
-        ]), 401, ['Content-Type' => 'application/json']);
+        ]), 404, ['Content-Type' => 'application/json']);
 
-        $this->assertSame([], $this->api->response($unauthorized, $request));
+        $this->assertSame([], $this->api->response($notFound, $request));
+
+        $invalid = new Response('{"code":"not_found"}', 404, ['Content-Type' => 'application/json']);
+
+        $this->assertNotEmpty($this->api->response($invalid, $request));
     }
 
     public function test_validates_nested_audit_path(): void

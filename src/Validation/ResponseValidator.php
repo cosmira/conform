@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Validation;
+namespace Cosmira\Conform\Validation;
 
-use Cosmira\OpenApi\Document\Document;
+use Cosmira\Conform\Document\Document;
 use Symfony\Component\HttpFoundation\Response;
 
 class ResponseValidator
@@ -20,7 +20,7 @@ class ResponseValidator
         $responses = $operation['responses'] ?? [];
 
         $spec = $responses[$status]
-            ?? $responses[substr($status, 0, 1) . 'XX']
+            ?? $responses[substr($status, 0, 1).'XX']
             ?? $responses['default']
             ?? null;
 
@@ -47,6 +47,7 @@ class ResponseValidator
 
             if (($value === null || $value === '') && ($header['required'] ?? false)) {
                 $errors[] = "Missing required response header [{$name}].";
+
                 continue;
             }
 

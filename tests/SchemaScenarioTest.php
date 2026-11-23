@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\Document\Document;
-use Cosmira\OpenApi\Validation\SchemaValidator;
+use Cosmira\Conform\Document\Document;
+use Cosmira\Conform\Validation\SchemaValidator;
 use PHPUnit\Framework\TestCase;
 
 class SchemaScenarioTest extends TestCase
 {
     protected SchemaValidator $v;
+
     protected Document $doc;
 
     protected function setUp(): void
@@ -125,7 +126,7 @@ class SchemaScenarioTest extends TestCase
         $this->assertSchemaInvalid([1, 'x'], $schema);
     }
 
-    public function test_allOf_oneOf_anyOf(): void
+    public function test_all_of_one_of_any_of(): void
     {
         $allOf = [
             'allOf' => [

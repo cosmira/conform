@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Reader;
+namespace Cosmira\Conform\Reader;
 
-use Cosmira\OpenApi\Document\Document;
-use Illuminate\Support\Arr;
+use Cosmira\Conform\Document\Document;
 use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\Finder\Finder;

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cosmira\OpenApi\Tests;
+namespace Cosmira\Conform\Tests;
 
-use Cosmira\OpenApi\OpenApi;
+use Cosmira\Conform\OpenApi;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,7 +13,7 @@ class OpenApiTest extends TestCase
 {
     public function test_end_to_end(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/petstore.yaml');
 
         $request = Request::create('/pets', 'POST', server: [
             'CONTENT_TYPE' => 'application/json',
@@ -35,13 +35,13 @@ class OpenApiTest extends TestCase
 
     public function test_from_directory_and_string(): void
     {
-        $this->assertNotNull(OpenApi::from(__DIR__ . '/fixtures')->match('GET', '/pets'));
-        $this->assertNotNull(OpenApi::parse(file_get_contents(__DIR__ . '/fixtures/users.yaml'))->match('GET', '/users/1'));
+        $this->assertNotNull(OpenApi::from(__DIR__.'/fixtures')->match('GET', '/pets'));
+        $this->assertNotNull(OpenApi::parse(file_get_contents(__DIR__.'/fixtures/users.yaml'))->match('GET', '/users/1'));
     }
 
     public function test_base_path_is_immutable(): void
     {
-        $api = OpenApi::from(__DIR__ . '/fixtures/petstore.yaml');
+        $api = OpenApi::from(__DIR__.'/fixtures/petstore.yaml');
         $withBase = $api->basePath('api');
 
         $this->assertNull($api->match('GET', '/api/pets'));
@@ -51,7 +51,7 @@ class OpenApiTest extends TestCase
 
     public function test_full_document_shape(): void
     {
-        $doc = OpenApi::from(__DIR__ . '/fixtures/full.yaml')->document();
+        $doc = OpenApi::from(__DIR__.'/fixtures/full.yaml')->document();
 
         $this->assertSame('petType', $doc->get('components.schemas.Pet.discriminator.propertyName'));
         $this->assertSame('Pet', $doc->get('components.schemas.Pet.xml.name'));

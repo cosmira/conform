@@ -1,0 +1,43 @@
+name: Mutation Testing
+
+on:
+  push:
+    branches: [main, 'ci/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  infection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: dom, mbstring, xml, xmlwriter
+          coverage: pcov
+          tools: composer:v2
+      - run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Require the mutation score baseline
+        run: php vendor/bin/infection --threads=4 --min-msi=60 --min-covered-msi=60 --no-progress
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutation-testing-report
+          path: |
+            infection-summary.log
+            infection.json
+            infection.html
+            infection.log
+          if-no-files-found: warn
