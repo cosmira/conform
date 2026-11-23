@@ -1,0 +1,336 @@
+openapi: 3.0.3
+info:
+  title: Full OpenAPI Coverage
+  description: Spec covering every OpenAPI 3.0 object type
+  termsOfService: https://example.com/terms
+  contact:
+    name: API Team
+    url: https://example.com/contact
+    email: team@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: 1.2.3
+  x-audience: public
+
+servers:
+  - url: https://api.example.com/{version}
+    description: Production
+    variables:
+      version:
+        enum: [v1, v2]
+        default: v1
+        description: API version
+
+tags:
+  - name: pets
+    description: Pet operations
+    externalDocs:
+      description: Pet docs
+      url: https://example.com/pets
+  - name: store
+
+externalDocs:
+  description: Full documentation
+  url: https://example.com/docs
+
+security:
+  - apiKey: []
+  - oauth2: [read:pets]
+
+paths:
+  /pets:
+    summary: Pets collection
+    description: Manage pets
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+    get:
+      tags: [pets]
+      summary: List pets
+      description: Returns all pets
+      operationId: listPets
+      externalDocs:
+        url: https://example.com/list-pets
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status
+          required: false
+          deprecated: false
+          schema:
+            type: string
+            enum: [available, pending, sold]
+          example: available
+        - name: X-Request-Id
+          in: header
+          schema:
+            type: string
+            format: uuid
+        - name: session
+          in: cookie
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of pets
+          headers:
+            X-Rate-Limit:
+              description: Calls per hour
+              required: false
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+              examples:
+                sample:
+                  summary: Sample list
+                  value:
+                    - id: 1
+                      name: Rex
+                      petType: dog
+          links:
+            showPet:
+              $ref: '#/components/links/PetLink'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+      security:
+        - apiKey: []
+      servers:
+        - url: https://pets.example.com
+    post:
+      tags: [pets]
+      operationId: createPet
+      requestBody:
+        $ref: '#/components/requestBodies/PetBody'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '4XX':
+          $ref: '#/components/responses/ErrorResponse'
+      callbacks:
+        petCreated:
+          '{$request.body#/callbackUrl}':
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        ok:
+                          type: boolean
+              responses:
+                '200':
+                  description: webhook ack
+
+  /pets/{petId}:
+    get:
+      operationId: showPet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: A pet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Pet'
+              encoding:
+                name:
+                  contentType: text/plain
+                  style: simple
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id, name, petType]
+      discriminator:
+        propertyName: petType
+        mapping:
+          dog: '#/components/schemas/Dog'
+          cat: '#/components/schemas/Cat'
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          readOnly: true
+        name:
+          type: string
+          minLength: 1
+          xml:
+            name: petName
+            attribute: false
+            wrapped: false
+        petType:
+          type: string
+        tag:
+          type: string
+          nullable: true
+      additionalProperties: false
+      xml:
+        name: Pet
+        namespace: https://example.com/schema
+        prefix: pet
+      externalDocs:
+        url: https://example.com/pet-schema
+      example:
+        id: 1
+        name: Rex
+        petType: dog
+
+    Dog:
+      allOf:
+        - $ref: '#/components/schemas/Pet'
+        - type: object
+          properties:
+            bark:
+              type: boolean
+
+    Cat:
+      allOf:
+        - $ref: '#/components/schemas/Pet'
+        - type: object
+          properties:
+            hunts:
+              type: boolean
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+      additionalProperties: false
+
+  responses:
+    ErrorResponse:
+      description: Error payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      description: Max items
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  examples:
+    PetExample:
+      summary: A dog
+      value:
+        id: 1
+        name: Rex
+        petType: dog
+
+  requestBodies:
+    PetBody:
+      description: Pet to create
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, petType]
+            properties:
+              name:
+                type: string
+              petType:
+                type: string
+                enum: [dog, cat]
+              tag:
+                type: string
+                nullable: true
+            additionalProperties: false
+          encoding:
+            name:
+              contentType: text/plain
+              explode: false
+
+  headers:
+    RateLimit:
+      description: Remaining calls
+      schema:
+        type: integer
+
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      name: X-API-Key
+      in: header
+      description: API key auth
+    oauth2:
+      type: oauth2
+      description: OAuth2
+      flows:
+        implicit:
+          authorizationUrl: https://example.com/oauth/authorize
+          scopes:
+            read:pets: Read pets
+            write:pets: Write pets
+        authorizationCode:
+          authorizationUrl: https://example.com/oauth/authorize
+          tokenUrl: https://example.com/oauth/token
+          refreshUrl: https://example.com/oauth/refresh
+          scopes:
+            read:pets: Read pets
+        password:
+          tokenUrl: https://example.com/oauth/token
+          scopes:
+            read:pets: Read
+        clientCredentials:
+          tokenUrl: https://example.com/oauth/token
+          scopes:
+            read:pets: Read
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://example.com/.well-known/openid-configuration
+
+  links:
+    PetLink:
+      operationId: showPet
+      parameters:
+        petId: $response.body#/id
+      description: Link to the pet
+      server:
+        url: https://api.example.com/v1
+
+  callbacks:
+    Webhook:
+      '{$request.body#/url}':
+        post:
+          responses:
+            '200':
+              description: OK

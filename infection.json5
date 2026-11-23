@@ -1,0 +1,29 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.29.0/resources/schema.json",
+    "source": {
+        "directories": [
+            "src"
+        ],
+        "excludes": [
+            "Laravel"
+        ]
+    },
+    "timeout": 10,
+    "threads": "max",
+    "logs": {
+        "text": "infection.log",
+        "html": "infection.html",
+        "summary": "infection-summary.log",
+        "json": "infection.json",
+        "stryker": {
+            "report": "infection-stryker.json"
+        }
+    },
+    "minMsi": 95,
+    "minCoveredMsi": 95,
+    "mutators": {
+        "@default": true
+    },
+    "testFramework": "phpunit",
+    "testFrameworkOptions": "--configuration=phpunit.xml"
+}

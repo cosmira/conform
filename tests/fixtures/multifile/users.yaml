@@ -1,0 +1,89 @@
+openapi: 3.0.1
+info:
+  title: Users
+  version: 1.0.0
+servers:
+  - url: /xapi
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/start'
+        - $ref: 'common.yaml#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                additionalProperties: false
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+    post:
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+  /users/{id}:
+    get:
+      operationId: showUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, name, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          minLength: 1
+        active:
+          $ref: 'common.yaml#/components/schemas/BooleanAsInteger'
+      additionalProperties: false
+    NewUser:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        active:
+          $ref: 'common.yaml#/components/schemas/BooleanAsInteger'
+      additionalProperties: false

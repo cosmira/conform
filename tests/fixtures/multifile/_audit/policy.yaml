@@ -1,0 +1,37 @@
+openapi: 3.0.1
+info:
+  title: Audit Policy
+  version: 1.0.0
+paths:
+  /audit/policies:
+    get:
+      operationId: listPolicies
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Policy'
+                additionalProperties: false
+        '401':
+          $ref: '../common.yaml#/components/responses/Unauthorized'
+components:
+  schemas:
+    Policy:
+      type: object
+      required: [id, title, enabled]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        enabled:
+          $ref: '../common.yaml#/components/schemas/BooleanAsInteger'
+      additionalProperties: false

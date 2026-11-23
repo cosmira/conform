@@ -1,0 +1,217 @@
+openapi: 3.0.1
+info:
+  title: PublicAPI-style fixture
+  version: 1.0.0
+  contact:
+    name: API Team
+    email: team@example.com
+  license:
+    name: MIT
+servers:
+  - url: /xapi
+security:
+  - authToken: []
+    version: []
+    companyId: []
+paths:
+  /user:
+    get:
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '4XX':
+          $ref: '#/components/responses/Error'
+  /user/{id}:
+    get:
+      operationId: showUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/Error'
+  /upload:
+    post:
+      operationId: upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                note:
+                  type: string
+                  nullable: true
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+  /items:
+    post:
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewItem'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+components:
+  securitySchemes:
+    authToken:
+      type: apiKey
+      in: header
+      name: X-API-Auth-Token
+    version:
+      type: apiKey
+      in: header
+      name: X-API-Version
+    companyId:
+      type: apiKey
+      in: header
+      name: X-API-CompanyId
+  parameters:
+    start:
+      name: start
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+  schemas:
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      additionalProperties: false
+    User:
+      type: object
+      required: [USER_ID, USERNAME, STATUS]
+      properties:
+        USER_ID:
+          type: integer
+        USERNAME:
+          type: string
+          minLength: 1
+        STATUS:
+          type: integer
+          enum: [0, 1, 2]
+        EMAIL:
+          type: string
+          nullable: true
+          format: email
+        EXTERNAL_ID:
+          type: string
+          format: guid
+        CREATED:
+          type: string
+          format: date-time-micro
+      additionalProperties: false
+    UserList:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        meta:
+          type: object
+          required: [totalCount, start, limit]
+          properties:
+            totalCount:
+              type: integer
+            start:
+              type: integer
+            limit:
+              type: integer
+      additionalProperties: false
+    NewItem:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        active:
+          type: integer
+          enum: [0, 1]
+      additionalProperties: false
+    Item:
+      allOf:
+        - $ref: '#/components/schemas/NewItem'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: integer
+              minimum: 1
