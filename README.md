@@ -1,12 +1,12 @@
 # Conform
 
-Conform validates HTTP requests and responses against OpenAPI 3.0 documents
-in PHP and Laravel.
+Conform checks HTTP requests and responses against OpenAPI 3.0 contracts in
+PHP and Laravel tests.
 
 ## Installation
 
 ```bash
-composer require cosmira/conform
+composer require --dev cosmira/conform
 ```
 
 ## Compatibility
@@ -47,54 +47,44 @@ $api->document()->resolve('common.yaml#/components/parameters/limit');
 OpenApi::parse($yaml);
 ```
 
-## Laravel
+## Laravel feature tests
+
+Add Conform to the `api` middleware group in the base class for your API
+feature tests. The routes under test must use that group.
+
+```php
+use Cosmira\Conform\Laravel\Middleware\ValidateOpenApi;
+use Tests\TestCase;
+
+abstract class ApiTestCase extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['conform.enabled' => true, 'conform.strict' => true]);
+        $this->app['router']->pushMiddlewareToGroup('api', ValidateOpenApi::class);
+        $this->withoutExceptionHandling();
+    }
+}
+```
+
+Strict mode throws `Cosmira\Conform\Laravel\ContractViolation` when the HTTP
+method and path have no OpenAPI operation or the response fails validation.
+`withoutExceptionHandling()` lets the exception reach PHPUnit directly.
+
+Put your specification in `resources/openapi`. Set `conform.path` to use a
+different file or directory. Set `conform.base_path` if your API uses a prefix
+other than `api`.
+
+To edit the defaults in `config/conform.php`, publish the configuration.
 
 ```bash
 php artisan vendor:publish --tag=conform-config
 ```
 
-```php
-$middleware->alias([
-    'conform' => \Cosmira\Conform\Laravel\Middleware\ValidateOpenApi::class,
-]);
-
-Route::middleware('conform')->group(function () {
-    //
-});
-```
-
-Conform enables validation when `APP_DEBUG=true` by default. Invalid requests
-return HTTP `422`. Invalid responses are reported through Laravel.
-
-```php
-// config/conform.php
-return [
-    'path' => resource_path('openapi'),
-    'enabled' => (bool) env('APP_DEBUG', false),
-    'strict' => false,
-];
-```
-
-Set `enabled` to `false` to disable validation even in debug mode.
-Set the optional `base_path` key if your API uses a prefix other than `api`.
-
-### Strict mode in tests
-
-Set `conform.strict` to `true` and keep `conform.enabled` on. Conform throws
-`Cosmira\Conform\Laravel\ContractViolation` when the HTTP method and path have
-no OpenAPI operation or the response fails validation.
-
-Use Laravel's `withoutExceptionHandling()` in the test to let the exception
-reach PHPUnit directly.
-
-```php
-config(['conform.enabled' => true, 'conform.strict' => true]);
-$this->withoutExceptionHandling();
-
-$this->getJson('/api/pets/42')->assertOk();
-```
-
-In default mode, unmatched requests pass through and Laravel receives a report
+The default configuration follows `APP_DEBUG` and leaves strict mode off.
+In that mode, unmatched requests pass through and Laravel receives a report
 for invalid responses. Invalid requests return HTTP `422` in either mode.
 Test coverage depends on which operations the suite exercises and which
 constraints the OpenAPI document declares.

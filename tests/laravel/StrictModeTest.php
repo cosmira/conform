@@ -17,6 +17,13 @@ use RuntimeException;
 
 final class StrictModeTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->app['router']->pushMiddlewareToGroup('api', ValidateOpenApi::class);
+    }
+
     public function createApplication(): Application
     {
         $bootstrap = __DIR__.'/build/bootstrap';
@@ -27,7 +34,7 @@ final class StrictModeTest extends TestCase
 
         $app = Application::configure(__DIR__)
             ->withRouting(using: static function (): void {
-                Route::middleware(ValidateOpenApi::class)->group(static function (): void {
+                Route::middleware('api')->group(static function (): void {
                     Route::get('/api/pets/{petId}', static fn (string $petId) => response()->json([
                         'id' => (int) $petId,
                         'name' => 'Rex',
