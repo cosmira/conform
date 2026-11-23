@@ -85,18 +85,46 @@ class OpenApi
     {
         $method = strtolower($method);
         $requestPath = $this->normalize($path);
+        $paths = $this->document->paths();
+        $item = $paths[$requestPath] ?? null;
+
+        if (is_array($item) && isset($item[$method]) && ! str_contains($requestPath, '{')) {
+            return [
+                'path' => $requestPath,
+                'pathItem' => $item,
+                'operation' => $item[$method],
+                'parameters' => [],
+            ];
+        }
+
+        return $this->matchTemplate($paths, $method, $requestPath);
+    }
+
+    /**
+     * Match templated paths in document order, favoring fewer placeholders.
+     *
+     * @return array{
+     *     path: string, pathItem: array, operation: array, parameters: array<string, string>
+     * }|null
+     */
+    private function matchTemplate(array $paths, string $method, string $requestPath): ?array
+    {
         $best = null;
         $bestScore = PHP_INT_MAX;
 
-        foreach ($this->document->paths() as $spec => $item) {
-            if (! is_array($item) || ! isset($item[$method])) {
+        foreach ($paths as $spec => $item) {
+            if (
+                ! is_array($item)
+                || ! isset($item[$method])
+                || ! $this->canMatch($spec, $requestPath)
+            ) {
                 continue;
             }
 
             $names = [];
             $pattern = $this->pathPattern($spec, $names);
 
-            if (! preg_match('#^'.$pattern.'$#', $requestPath, $matches)) {
+            if (preg_match('#\A'.$pattern.'\z#', $requestPath, $matches) !== 1) {
                 continue;
             }
 
@@ -125,19 +153,41 @@ class OpenApi
     }
 
     /**
+     * Reject literal paths and templates whose fixed prefix or suffix differs.
+     */
+    private function canMatch(string $template, string $path): bool
+    {
+        $first = strpos($template, '{');
+
+        if ($first === false || ! str_starts_with($path, substr($template, 0, $first))) {
+            return false;
+        }
+
+        $last = strrpos($template, '}');
+
+        return $last !== false && str_ends_with($path, substr($template, $last + 1));
+    }
+
+    /**
      * Compile path placeholders in order and collect their parameter names.
      */
-    private function pathPattern(string $template, array &$names): ?string
+    private function pathPattern(string $template, array &$names): string
     {
-        return preg_replace_callback(
-            '/\{([^}]+)\}/',
-            static function (array $capture) use (&$names) {
-                $names[] = $capture[1];
+        $parts = preg_split('/\{([^}]+)\}/', $template, flags: PREG_SPLIT_DELIM_CAPTURE);
+        $pattern = '';
 
-                return '([^/]+)';
-            },
-            $template,
-        );
+        foreach ($parts as $index => $part) {
+            if ($index % 2 === 0) {
+                $pattern .= preg_quote($part, '#');
+
+                continue;
+            }
+
+            $names[] = $part;
+            $pattern .= '([^/]+)';
+        }
+
+        return $pattern;
     }
 
     /**
