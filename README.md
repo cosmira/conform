@@ -137,6 +137,19 @@ Infection runs PHPUnit before generating mutations. `composer mutate` requires
 [The CI mutation job](.github/workflows/mutation.yml) enforces a 60% baseline on
 both scores and uploads the report. See `infection-summary.log` for local results.
 
+## Benchmark
+
+```bash
+composer benchmark
+```
+
+The benchmark reads the Petstore YAML fixture, matches a route among 103 paths,
+and validates a JSON request, a 100-item response, and a full validation
+exchange. The validation scenarios reuse the parsed document and HTTP objects.
+The JSON report shows the median and range of nine samples in microseconds
+per operation. Compare reports on the same machine with the same PHP settings
+and dependency versions. CI uploads a `conform-benchmark` report for each run.
+
 ## License
 
 MIT

@@ -39,7 +39,8 @@
     "scripts": {
         "test": "@php vendor/bin/phpunit",
         "test:coverage": "@php vendor/bin/phpunit --coverage-text",
-        "mutate": "@php vendor/bin/infection --threads=max --min-msi=95 --min-covered-msi=95 --show-mutations"
+        "mutate": "@php vendor/bin/infection --threads=max --min-msi=95 --min-covered-msi=95 --show-mutations",
+        "benchmark": "@php -d pcov.enabled=0 -d xdebug.mode=off tools/benchmark.php"
     },
     "extra": {
         "laravel": {
