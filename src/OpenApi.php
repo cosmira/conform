@@ -14,14 +14,32 @@ use Symfony\Component\HttpFoundation\Response;
 /** @phpstan-consistent-constructor */
 class OpenApi
 {
+    /**
+     * Optional URI prefix removed before matching OpenAPI paths.
+     */
     protected string $basePath = '';
 
+    /**
+     * Bind request and response validation to a parsed specification.
+     */
     public function __construct(
+        /**
+         * OpenAPI specification used to match operations and resolve references.
+         */
         protected Document $document,
+        /**
+         * Validator for request parameters, bodies, and security requirements.
+         */
         protected RequestValidator $requests = new RequestValidator,
+        /**
+         * Validator for response statuses, headers, and bodies.
+         */
         protected ResponseValidator $responses = new ResponseValidator,
     ) {}
 
+    /**
+     * Load a standalone OpenAPI file or a directory of related documents.
+     */
     public static function from(string $path): static
     {
         return is_dir($path)
@@ -29,11 +47,17 @@ class OpenApi
             : new static(Reader::file($path));
     }
 
+    /**
+     * Read an OpenAPI document from its YAML or JSON text.
+     */
     public static function parse(string $contents): static
     {
         return new static(Reader::string($contents));
     }
 
+    /**
+     * Return a copy that recognizes the given API prefix.
+     */
     public function basePath(string $path): static
     {
         $api = clone $this;
@@ -42,18 +66,25 @@ class OpenApi
         return $api;
     }
 
+    /**
+     * Expose the parsed document for direct reference and metadata lookup.
+     */
     public function document(): Document
     {
         return $this->document;
     }
 
     /**
-     * @return array{path: string, pathItem: array, operation: array, parameters: array<string, string>}|null
+     * Find the most specific operation and extract the URI template parameters.
+     *
+     * @return array{
+     *     path: string, pathItem: array, operation: array, parameters: array<string, string>
+     * }|null
      */
     public function match(string $method, string $path): ?array
     {
         $method = strtolower($method);
-        $path = $this->normalize($path);
+        $requestPath = $this->normalize($path);
         $best = null;
         $bestScore = PHP_INT_MAX;
 
@@ -63,13 +94,9 @@ class OpenApi
             }
 
             $names = [];
-            $pattern = preg_replace_callback('/\{([^}]+)\}/', function (array $m) use (&$names) {
-                $names[] = $m[1];
+            $pattern = $this->pathPattern($spec, $names);
 
-                return '([^/]+)';
-            }, $spec);
-
-            if (! preg_match('#^'.$pattern.'$#', $path, $matches)) {
+            if (! preg_match('#^'.$pattern.'$#', $requestPath, $matches)) {
                 continue;
             }
 
@@ -81,8 +108,8 @@ class OpenApi
 
             $parameters = [];
 
-            foreach ($names as $i => $name) {
-                $parameters[$name] = $matches[$i + 1];
+            foreach ($names as $index => $name) {
+                $parameters[$name] = $matches[$index + 1];
             }
 
             $bestScore = $score;
@@ -97,7 +124,27 @@ class OpenApi
         return $best;
     }
 
-    /** @return list<string> */
+    /**
+     * Compile path placeholders in order and collect their parameter names.
+     */
+    private function pathPattern(string $template, array &$names): ?string
+    {
+        return preg_replace_callback(
+            '/\{([^}]+)\}/',
+            static function (array $capture) use (&$names) {
+                $names[] = $capture[1];
+
+                return '([^/]+)';
+            },
+            $template,
+        );
+    }
+
+    /**
+     * Validate the request for its matched operation and return the error messages.
+     *
+     * @return list<string>
+     */
     public function request(Request $request): array
     {
         $match = $this->match($request->getMethod(), $request->getPathInfo());
@@ -115,7 +162,11 @@ class OpenApi
         );
     }
 
-    /** @return list<string> */
+    /**
+     * Validate a response against the operation matched by its request.
+     *
+     * @return list<string>
+     */
     public function response(Response $response, Request $request): array
     {
         $match = $this->match($request->getMethod(), $request->getPathInfo());
@@ -127,24 +178,27 @@ class OpenApi
         return $this->responses->validate($response, $match['operation'], $this->document);
     }
 
+    /**
+     * Remove a configured API prefix at the path boundary.
+     */
     protected function normalize(string $path): string
     {
-        $path = '/'.ltrim($path, '/');
+        $absolutePath = '/'.ltrim($path, '/');
 
         if ($this->basePath === '') {
-            return $path;
+            return $absolutePath;
         }
 
         $prefix = '/'.$this->basePath;
 
-        if ($path === $prefix) {
+        if ($absolutePath === $prefix) {
             return '/';
         }
 
-        if (str_starts_with($path, $prefix.'/')) {
-            return substr($path, strlen($prefix)) ?: '/';
+        if (str_starts_with($absolutePath, $prefix.'/')) {
+            return substr($absolutePath, strlen($prefix)) ?: '/';
         }
 
-        return $path;
+        return $absolutePath;
     }
 }

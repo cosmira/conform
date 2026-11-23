@@ -1,9 +1,6 @@
 <?php
 
 return [
-
     'path' => resource_path('openapi'),
-
-    'base_path' => 'api',
-
+    'enabled' => (bool) env('APP_DEBUG', false),
 ];

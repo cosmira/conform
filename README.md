@@ -50,28 +50,32 @@ OpenApi::parse($yaml);
 ## Laravel
 
 ```bash
-php artisan vendor:publish --tag=openapi-config
+php artisan vendor:publish --tag=conform-config
 ```
 
 ```php
 $middleware->alias([
-    'openapi' => \Cosmira\Conform\Laravel\Middleware\ValidateOpenApi::class,
+    'conform' => \Cosmira\Conform\Laravel\Middleware\ValidateOpenApi::class,
 ]);
 
-Route::middleware('openapi')->group(function () {
+Route::middleware('conform')->group(function () {
     //
 });
 ```
 
-Runs only when `APP_DEBUG=true`. Invalid request → `422`. Invalid response → reported.
+Conform enables validation when `APP_DEBUG=true` by default. Invalid requests
+return HTTP `422`. Invalid responses are reported through Laravel.
 
 ```php
-// config/openapi.php
+// config/conform.php
 return [
     'path' => resource_path('openapi'),
-    'base_path' => 'api',
+    'enabled' => (bool) env('APP_DEBUG', false),
 ];
 ```
+
+Set `enabled` to `false` to disable validation even in debug mode.
+Set the optional `base_path` key if your API uses a prefix other than `api`.
 
 ## What is validated
 

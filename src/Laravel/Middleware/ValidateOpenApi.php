@@ -11,21 +11,23 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ValidateOpenApi
 {
-    public function __construct(
-        protected OpenApi $openapi,
-    ) {}
-
+    /**
+     * Validate the exchange when enabled and report any response mismatches.
+     */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! app()->hasDebugModeEnabled()) {
+        if (! config('conform.enabled')) {
             return $next($request);
         }
 
-        if ($route = $request->route()) {
+        $route = $request->route();
+
+        if ($route !== null) {
             $request->attributes->set('_route_params', $route->parameters());
         }
 
-        $errors = $this->openapi->request($request);
+        $openapi = app(OpenApi::class);
+        $errors = $openapi->request($request);
 
         if ($errors !== []) {
             return response()->json([
@@ -36,7 +38,7 @@ class ValidateOpenApi
 
         $response = $next($request);
 
-        $errors = $this->openapi->response($response, $request);
+        $errors = $openapi->response($response, $request);
 
         if ($errors !== []) {
             report(new \RuntimeException(

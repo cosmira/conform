@@ -9,10 +9,18 @@ use Illuminate\Support\Arr;
 class Document
 {
     /**
+     * Index a merged specification and its source documents for reference resolution.
+     *
      * @param  array<string, array>  $files  relative path → parsed document
      */
     public function __construct(
+        /**
+         * Merged document used for operation and component lookup.
+         */
         protected array $data,
+        /**
+         * Parsed documents keyed by their paths relative to the bundle root.
+         */
         protected array $files = [],
     ) {
         if ($this->files === []) {
@@ -20,27 +28,43 @@ class Document
         }
     }
 
+    /**
+     * Read the OpenAPI version declared by the specification.
+     */
     public function version(): string
     {
         return (string) ($this->data['openapi'] ?? '');
     }
 
+    /**
+     * Return the path items indexed by URI template.
+     */
     public function paths(): array
     {
         return $this->data['paths'] ?? [];
     }
 
+    /**
+     * Return the parsed specification as an array.
+     */
     public function raw(): array
     {
         return $this->data;
     }
 
-    /** @return array<string, array> */
+    /**
+     * Return the original documents indexed by bundle-relative path.
+     *
+     * @return array<string, array>
+     */
     public function files(): array
     {
         return $this->files;
     }
 
+    /**
+     * Read a value by its dotted key, falling back when the key is absent.
+     */
     public function get(string $key, mixed $default = null): mixed
     {
         return Arr::get($this->data, $key, $default);
@@ -82,29 +106,34 @@ class Document
     }
 
     /**
+     * Split a reference into its source file and fragment pointer.
+     *
      * @return array{0: string, 1: string} [file, pointer without leading #/]
      */
     protected function parse(string $ref, ?string $from): array
     {
         $ref = trim($ref, " \t\"'");
-        $from = $from ?? '';
+        $origin = $from ?? '';
 
         if (! str_contains($ref, '#')) {
-            return [$from, ltrim($ref, '#/')];
+            return [$origin, ltrim($ref, '#/')];
         }
 
         [$file, $pointer] = explode('#', $ref, 2);
         $file = str_replace('\\', '/', trim($file));
 
         if ($file !== '') {
-            $file = $this->join($from, $file);
+            $file = $this->join($origin, $file);
         } else {
-            $file = $from;
+            $file = $origin;
         }
 
         return [$file, ltrim($pointer, '/')];
     }
 
+    /**
+     * Find the source document, with merged data available for root references.
+     */
     protected function source(string $file, string $ref, ?string $from): ?array
     {
         if (isset($this->files[$file])) {
@@ -119,6 +148,9 @@ class Document
         return null;
     }
 
+    /**
+     * Decode JSON Pointer escapes and build a key for the array lookup.
+     */
     protected function pointerPath(string $pointer): string
     {
         return collect(explode('/', $pointer))
@@ -126,6 +158,9 @@ class Document
             ->implode('.');
     }
 
+    /**
+     * Resolve a relative reference against the directory of its source file.
+     */
     protected function join(string $from, string $relative): string
     {
         $relative = str_replace('\\', '/', $relative);
@@ -134,8 +169,7 @@ class Document
             return ltrim($relative, './');
         }
 
-        $directory = str_contains($from, '/') ? dirname($from) : '';
-        $parts = ($directory === '' || $directory === '.') ? [] : explode('/', $directory);
+        $parts = $this->parentSegments($from);
 
         foreach (explode('/', $relative) as $part) {
             if ($part === '' || $part === '.') {
@@ -152,5 +186,15 @@ class Document
         }
 
         return implode('/', $parts);
+    }
+
+    /**
+     * Find the directory segments of the file containing the reference.
+     */
+    protected function parentSegments(string $file): array
+    {
+        $directory = dirname($file);
+
+        return $directory === '.' ? [] : explode('/', $directory);
     }
 }

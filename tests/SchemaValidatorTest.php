@@ -287,4 +287,14 @@ class SchemaValidatorTest extends TestCase
         $this->assertStringContainsString('string', $error);
         $this->assertStringContainsString('integer', $error);
     }
+
+    public function test_invalid_pattern_returns_validation_error_without_php_warning(): void
+    {
+        $schema = ['type' => 'string', 'pattern' => '['];
+
+        $this->assertSame(
+            'pattern mismatch',
+            $this->validator->validate('example', $schema, $this->document),
+        );
+    }
 }
