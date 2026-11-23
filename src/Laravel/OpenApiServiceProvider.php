@@ -16,10 +16,11 @@ class OpenApiServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/config/conform.php', 'conform');
 
-        $this->app->singleton(OpenApi::class, function () {
-            return OpenApi::from((string) config('conform.path'))
-                ->basePath((string) config('conform.base_path', 'api'));
-        });
+        $this->app->singleton(
+            OpenApi::class,
+            static fn (): OpenApi => OpenApi::from((string) config('conform.path'))
+                ->basePath((string) config('conform.base_path', 'api')),
+        );
     }
 
     /**

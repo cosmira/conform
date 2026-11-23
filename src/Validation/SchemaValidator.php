@@ -392,7 +392,7 @@ class SchemaValidator
             return null;
         }
 
-        $encoded = array_map(static fn (mixed $item) => json_encode($item), $data);
+        $encoded = array_map(json_encode(...), $data);
 
         return count($encoded) === count(array_unique($encoded))
             ? null

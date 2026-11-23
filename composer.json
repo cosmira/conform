@@ -23,8 +23,10 @@
         "symfony/http-foundation": "^6.0 || ^7.0 || ^8.0"
     },
     "require-dev": {
+        "infection/infection": "^0.29 || ^0.35",
+        "phpstan/phpstan": "^2.3.5",
         "phpunit/phpunit": "^11.0 || ^12.0 || ^13.0",
-        "infection/infection": "^0.29 || ^0.35"
+        "rector/rector": "^2.8"
     },
     "autoload": {
         "psr-4": {
@@ -39,6 +41,11 @@
     "scripts": {
         "test": "@php vendor/bin/phpunit",
         "test:coverage": "@php vendor/bin/phpunit --coverage-text",
+        "test:types": "@php vendor/bin/phpstan analyse --memory-limit=512M --no-progress",
+        "test:rector": [
+            "@php vendor/bin/rector validate-config",
+            "@php vendor/bin/rector process --dry-run --no-progress-bar"
+        ],
         "mutate": "@php vendor/bin/infection --threads=max --min-msi=95 --min-covered-msi=95 --show-mutations",
         "benchmark": "@php -d pcov.enabled=0 -d xdebug.mode=off tools/benchmark.php"
     },

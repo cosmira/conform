@@ -120,6 +120,9 @@ composer install
 composer test
 ```
 
+Run Rector in check mode with `composer test:rector`. The rules target PHP 8.2
+and preserve compatibility with PHPUnit 11.
+
 For coverage and mutation testing, enable PCOV or Xdebug.
 
 ```bash

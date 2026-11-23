@@ -27,13 +27,15 @@ jobs:
           php-version: '8.5'
           extensions: dom, mbstring, xml, xmlwriter
           coverage: none
-          tools: composer:v2, phpstan:2.3.7
+          tools: composer:v2
       - run: composer validate --strict --no-check-lock
       - run: composer install --prefer-dist --no-interaction --no-progress
       - name: Check PHP syntax
         run: find src tests tools -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Analyse OpenAPI validators and tests
-        run: phpstan analyse --level=0 --no-progress src/Document src/Reader src/Validation src/OpenApi.php tests
+        run: composer test:types
+      - name: Check Rector rules without rewriting files
+        run: composer test:rector
       - name: Check source quality with Soda
         run: |
           mkdir -p "$RUNNER_TEMP/soda"
