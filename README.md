@@ -77,6 +77,11 @@ return [
 Set `enabled` to `false` to disable validation even in debug mode.
 Set the optional `base_path` key if your API uses a prefix other than `api`.
 
+Conform validates exchanges where the request matches an OpenAPI operation.
+Unmatched requests pass through. Response mismatches are reported to Laravel.
+Test coverage depends on which operations the suite exercises and which
+constraints the OpenAPI document declares.
+
 ## What is validated
 
 | Area | Support |
@@ -152,6 +157,10 @@ exchange. The validation scenarios reuse the parsed document and HTTP objects.
 The JSON report shows the median and range of nine samples in microseconds
 per operation. Compare reports on the same machine with the same PHP settings
 and dependency versions. CI uploads a `conform-benchmark` report for each run.
+
+The suite scenarios cycle through 25 endpoints among 100, 1,000, and 5,000
+paths. Each operation measures Conform's request and response checks.
+Laravel, application code, and the database run outside this benchmark.
 
 ## License
 

@@ -10,6 +10,71 @@ use Symfony\Component\HttpFoundation\Response;
 
 require dirname(__DIR__).'/vendor/autoload.php';
 
+/**
+ * Cycle through 25 endpoints spread across a larger OpenAPI document.
+ */
+function validationSuite(array $spec, int $pathCount, Request $sample, Response $expected): Closure
+{
+    $operation = $spec['paths']['/pets']['post'];
+    $spec['paths'] = [];
+    $requests = [];
+    $stride = intdiv($pathCount, 25);
+
+    for ($index = 0; $index < $pathCount; $index++) {
+        $dynamic = intdiv($index, $stride) % 2 === 0;
+        $prefix = $dynamic ? '/tenants/{tenantId}' : '/catalog';
+        $template = "{$prefix}/resources/{$index}";
+        $operationId = "createResource{$index}";
+        $spec['paths'][$template] = ['post' => ['operationId' => $operationId] + $operation];
+
+        if ($index % $stride === 0) {
+            $uri = str_replace('{tenantId}', '42', $template);
+            $requests[$operationId] = Request::create(
+                $uri,
+                'POST',
+                server: ['CONTENT_TYPE' => 'application/json'],
+                content: $sample->getContent(),
+            );
+        }
+    }
+
+    $api = new OpenApi(new Document($spec));
+
+    foreach ($requests as $operationId => $request) {
+        $match = $api->match('POST', $request->getPathInfo());
+
+        if (($match['operation']['operationId'] ?? null) !== $operationId) {
+            throw new RuntimeException("The {$pathCount}-path suite could not match {$operationId}.");
+        }
+    }
+
+    $requests = array_values($requests);
+    $invalid = Request::create(
+        $requests[0]->getPathInfo(),
+        'POST',
+        server: ['CONTENT_TYPE' => 'application/json'],
+        content: '{"status":"available"}',
+    );
+    $invalidResponse = new Response('{"name":"Rex"}', 201, ['Content-Type' => 'application/json']);
+
+    if (
+        $api->request($invalid) !== ['body: missing required property [name]']
+        || $api->response($invalidResponse, $requests[array_key_last($requests)])
+            !== ['response: missing required property [id]']
+    ) {
+        throw new RuntimeException("The {$pathCount}-path suite did not reject its invalid inputs.");
+    }
+
+    $next = 0;
+
+    return static function () use ($api, $requests, $expected, &$next): bool {
+        $request = $requests[$next];
+        $next = ($next + 1) % count($requests);
+
+        return $api->request($request) === [] && $api->response($expected, $request) === [];
+    };
+}
+
 $fixture = dirname(__DIR__).'/tests/fixtures/petstore.yaml';
 $api = OpenApi::from($fixture);
 $spec = $api->document()->raw();
@@ -67,6 +132,12 @@ $scenarios = [
         && $api->response($created, $create) === []],
 ];
 
+$suiteSizes = [100, 1_000, 5_000];
+
+foreach ($suiteSizes as $pathCount) {
+    $scenarios["validate_suite_{$pathCount}_paths"] = [50, validationSuite($spec, $pathCount, $create, $created)];
+}
+
 $warmup = 20;
 $sampleCount = 9;
 $results = [];
@@ -119,6 +190,8 @@ echo json_encode([
     'workload' => [
         'specification_bytes' => filesize($fixture),
         'routing_paths' => count($spec['paths']),
+        'suite_path_counts' => $suiteSizes,
+        'suite_distinct_endpoints' => 25,
         'list_response_items' => count($pets),
         'list_response_bytes' => strlen($listJson),
     ],
