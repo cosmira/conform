@@ -40,7 +40,7 @@ class SchemaScenarioTest extends TestCase
         $this->assertNull($this->v->validate($data, $schema, $this->doc), json_encode($data));
     }
 
-    protected function fail(mixed $data, array $schema): void
+    protected function assertSchemaInvalid(mixed $data, array $schema): void
     {
         $this->assertNotNull($this->v->validate($data, $schema, $this->doc), json_encode($data));
     }
@@ -48,39 +48,39 @@ class SchemaScenarioTest extends TestCase
     public function test_types(): void
     {
         $this->ok('x', ['type' => 'string']);
-        $this->fail(1, ['type' => 'string']);
+        $this->assertSchemaInvalid(1, ['type' => 'string']);
         $this->ok(1, ['type' => 'integer']);
-        $this->fail(1.5, ['type' => 'integer']);
+        $this->assertSchemaInvalid(1.5, ['type' => 'integer']);
         $this->ok(1.5, ['type' => 'number']);
         $this->ok(true, ['type' => 'boolean']);
         $this->ok(['a' => 1], ['type' => 'object']);
         $this->ok([1, 2], ['type' => 'array']);
         $this->ok(null, ['type' => 'string', 'nullable' => true]);
-        $this->fail(null, ['type' => 'string']);
+        $this->assertSchemaInvalid(null, ['type' => 'string']);
     }
 
     public function test_enum_const(): void
     {
         $this->ok(0, ['enum' => [0, 1, 2]]);
-        $this->fail(3, ['enum' => [0, 1, 2]]);
+        $this->assertSchemaInvalid(3, ['enum' => [0, 1, 2]]);
         $this->ok('a', ['const' => 'a']);
-        $this->fail('b', ['const' => 'a']);
+        $this->assertSchemaInvalid('b', ['const' => 'a']);
     }
 
     public function test_string_bounds_pattern(): void
     {
         $this->ok('ab', ['type' => 'string', 'minLength' => 2, 'maxLength' => 3]);
-        $this->fail('a', ['type' => 'string', 'minLength' => 2]);
-        $this->fail('abcd', ['type' => 'string', 'maxLength' => 3]);
+        $this->assertSchemaInvalid('a', ['type' => 'string', 'minLength' => 2]);
+        $this->assertSchemaInvalid('abcd', ['type' => 'string', 'maxLength' => 3]);
         $this->ok('A1', ['type' => 'string', 'pattern' => '^[A-Z][0-9]$']);
-        $this->fail('a1', ['type' => 'string', 'pattern' => '^[A-Z][0-9]$']);
+        $this->assertSchemaInvalid('a1', ['type' => 'string', 'pattern' => '^[A-Z][0-9]$']);
     }
 
     public function test_number_bounds(): void
     {
         $this->ok(5, ['type' => 'integer', 'minimum' => 1, 'maximum' => 10]);
-        $this->fail(0, ['type' => 'integer', 'minimum' => 1]);
-        $this->fail(11, ['type' => 'integer', 'maximum' => 10]);
+        $this->assertSchemaInvalid(0, ['type' => 'integer', 'minimum' => 1]);
+        $this->assertSchemaInvalid(11, ['type' => 'integer', 'maximum' => 10]);
     }
 
     public function test_object_required_additional(): void
@@ -95,8 +95,8 @@ class SchemaScenarioTest extends TestCase
             'additionalProperties' => false,
         ];
         $this->ok(['id' => 1, 'name' => null], $schema);
-        $this->fail(['name' => 'x'], $schema);
-        $this->fail(['id' => 1, 'extra' => true], $schema);
+        $this->assertSchemaInvalid(['name' => 'x'], $schema);
+        $this->assertSchemaInvalid(['id' => 1, 'extra' => true], $schema);
     }
 
     public function test_object_without_type(): void
@@ -108,7 +108,7 @@ class SchemaScenarioTest extends TestCase
             'required' => ['id'],
         ];
         $this->ok(['id' => 1], $schema);
-        $this->fail([], $schema);
+        $this->assertSchemaInvalid([], $schema);
     }
 
     public function test_array_items_bounds(): void
@@ -120,9 +120,9 @@ class SchemaScenarioTest extends TestCase
             'items' => ['type' => 'integer'],
         ];
         $this->ok([1], $schema);
-        $this->fail([], $schema);
-        $this->fail([1, 2, 3], $schema);
-        $this->fail([1, 'x'], $schema);
+        $this->assertSchemaInvalid([], $schema);
+        $this->assertSchemaInvalid([1, 2, 3], $schema);
+        $this->assertSchemaInvalid([1, 'x'], $schema);
     }
 
     public function test_allOf_oneOf_anyOf(): void
@@ -134,7 +134,7 @@ class SchemaScenarioTest extends TestCase
             ],
         ];
         $this->ok(['a' => 'x', 'b' => 1], $allOf);
-        $this->fail(['a' => 'x'], $allOf);
+        $this->assertSchemaInvalid(['a' => 'x'], $allOf);
 
         $oneOf = [
             'oneOf' => [
@@ -143,7 +143,7 @@ class SchemaScenarioTest extends TestCase
             ],
         ];
         $this->ok('x', $oneOf);
-        $this->fail(true, $oneOf);
+        $this->assertSchemaInvalid(true, $oneOf);
 
         $anyOf = [
             'anyOf' => [
@@ -153,14 +153,14 @@ class SchemaScenarioTest extends TestCase
         ];
         $this->ok('abc', $anyOf);
         $this->ok(10, $anyOf);
-        $this->fail('ab', $anyOf);
+        $this->assertSchemaInvalid('ab', $anyOf);
     }
 
     public function test_ref_resolution(): void
     {
         $this->ok(['id' => 1], ['$ref' => '#/components/schemas/Soft']);
-        $this->fail(['name' => 'x'], ['$ref' => '#/components/schemas/Soft']);
-        $this->fail(['id' => 0], ['$ref' => '#/components/schemas/Soft']);
+        $this->assertSchemaInvalid(['name' => 'x'], ['$ref' => '#/components/schemas/Soft']);
+        $this->assertSchemaInvalid(['id' => 0], ['$ref' => '#/components/schemas/Soft']);
     }
 
     public function test_formats_used_in_publicapi(): void
@@ -168,7 +168,7 @@ class SchemaScenarioTest extends TestCase
         $uuid = '550e8400-e29b-41d4-a716-446655440000';
         $this->ok($uuid, ['type' => 'string', 'format' => 'uuid']);
         $this->ok($uuid, ['type' => 'string', 'format' => 'guid']);
-        $this->fail('not-a-guid', ['type' => 'string', 'format' => 'guid']);
+        $this->assertSchemaInvalid('not-a-guid', ['type' => 'string', 'format' => 'guid']);
         $this->ok('2020-01-02', ['type' => 'string', 'format' => 'date']);
         $this->ok('2020-01-02 15:04:05.123456', ['type' => 'string', 'format' => 'date-time-micro']);
         $this->ok('1700000000', ['type' => 'string', 'format' => 'unixtime']);
@@ -183,6 +183,6 @@ class SchemaScenarioTest extends TestCase
             'additionalProperties' => ['type' => 'integer'],
         ];
         $this->ok(['a' => 1, 'b' => 2], $schema);
-        $this->fail(['a' => 'x'], $schema);
+        $this->assertSchemaInvalid(['a' => 'x'], $schema);
     }
 }
